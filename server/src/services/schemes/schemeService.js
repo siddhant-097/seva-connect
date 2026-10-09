@@ -10,14 +10,14 @@ import { isDBConnected } from '../../config/db.js';
 export async function getAllSchemes({ q, category, state, page = 1, limit = 20 } = {}) {
   if (isDBConnected) {
     try {
-      const filter = { isActive: true };
+      const filter = { isActive: true, displayOrder: { $gt: 0 } };
       if (category && category !== 'All schemes') filter.category = category.toUpperCase();
       if (state && state !== 'ALL') filter.state = { $in: [state, 'ALL'] };
       if (q) filter.$text = { $search: q };
 
       const skip = (page - 1) * limit;
       const [schemes, total] = await Promise.all([
-        Scheme.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        Scheme.find(filter).sort({ displayOrder: 1, createdAt: -1 }).skip(skip).limit(limit),
         Scheme.countDocuments(filter),
       ]);
 

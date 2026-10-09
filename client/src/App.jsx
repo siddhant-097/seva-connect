@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 import './App.css'
 import { Icon, PrototypeNotice, SiteFooter, SiteHeader, SiteSubNav } from './components/SiteChrome.jsx'
 
-const schemes = [
+const fallbackSchemes = [
     {
         id: 'pm-kisan',
         name: 'PM-KISAN',
@@ -59,7 +59,6 @@ const schemes = [
     { id: 'pm-matru-vandana', name: 'Pradhan Mantri Matru Vandana Yojana', category: 'Women', audience: 'For eligible pregnant and lactating women', description: 'Find information about maternity benefit support and how to apply.', source: 'https://pmmvy.wcd.gov.in/', mark: '20' },
 ]
 
-const categories = ['All schemes', ...new Set(schemes.map((scheme) => scheme.category))]
 const schemesPerPage = 6
 
 const quickPrompts = [
@@ -108,7 +107,16 @@ function readSavedProfile() {
         return null
     }
 }
+function formatCategory(category) {
+    return String(category || 'Other')
+        .toLowerCase()
+        .split('_')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+}
 function App() {
+    const [schemes, setSchemes] = useState(fallbackSchemes)
+    const [catalogFallback, setCatalogFallback] = useState(false)
     const [query, setQuery] = useState('')
     const [activeCategory, setActiveCategory] = useState('All schemes')
     const [currentPage, setCurrentPage] = useState(1)
@@ -145,9 +153,46 @@ function App() {
     }, [])
 
     useEffect(() => {
+        let isCurrent = true
+
+        fetch('/api/v1/schemes?limit=100')
+            .then((response) => {
+                if (!response.ok) throw new Error(`Scheme API returned ${response.status}`)
+                return response.json()
+            })
+            .then((payload) => {
+                const records = payload?.data?.schemes
+                if (!payload?.success || !Array.isArray(records) || records.length === 0) {
+                    throw new Error('Scheme API returned no catalogue records')
+                }
+
+                const catalogue = records.map((scheme, index) => ({
+                    id: scheme.slug || scheme.id || scheme._id || `scheme-${index + 1}`,
+                    name: scheme.displayName || scheme.name,
+                    category: scheme.cardCategory || formatCategory(scheme.category),
+                    audience: scheme.audience || 'Check the official source for details',
+                    description: scheme.cardDescription || scheme.description,
+                    source: scheme.officialUrl,
+                    mark: String(scheme.displayOrder || index + 1).padStart(2, '0'),
+                }))
+
+                if (isCurrent) {
+                    setSchemes(catalogue)
+                    setCatalogFallback(false)
+                    setCurrentPage(1)
+                }
+            })
+            .catch(() => {
+                if (isCurrent) setCatalogFallback(true)
+            })
+
+        return () => { isCurrent = false }
+    }, [])
+    useEffect(() => {
         if (showAssistant) threadEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [conversation, isLoading, showAssistant])
 
+    const categories = ['All schemes', ...new Set(schemes.map((scheme) => scheme.category))]
     const filteredSchemes = schemes.filter((scheme) => {
         const matchesCategory = activeCategory === 'All schemes' || scheme.category === activeCategory
         const searchText = `${scheme.name} ${scheme.category} ${scheme.audience} ${scheme.description}`.toLowerCase()
@@ -263,7 +308,7 @@ function App() {
                             <h2>Explore support that fits your life.</h2>
                             <p className="section-lead">Browse a few popular starting points, or search across the catalog.</p>
                         </div>
-                        <span className="catalog-note">Sample catalog · Always verify details with the official source</span>
+                        <span className="catalog-note">{catalogFallback ? 'Showing the sample catalogue because the server is unavailable' : 'Scheme details are for guidance; verify with the official source'}</span>
                     </div>
 
                     <div className="discovery-controls">

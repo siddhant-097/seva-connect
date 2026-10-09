@@ -1,8 +1,7 @@
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import env from '../config/env.js';
 import Scheme from '../models/Scheme.js';
 
-dotenv.config();
 
 const schemes = [
   {
@@ -215,27 +214,94 @@ const schemes = [
   },
 ];
 
-export const seedSchemes = schemes.map((s, index) => ({
-  ...s,
-  _id: s._id || `65f00000000000000000000${(index + 1).toString(16).padStart(2, '0')}`,
-  isActive: true,
-}));
+const detailedCardIds = [
+  'pm-kisan', 'pmay-gramin', 'pm-ujjwala', 'scholarships', 'pm-jay',
+  'mgnrega', 'mudra', 'kcc', 'ladli-behna', 'atal-pension',
+];
+const detailedSchemesByCardId = Object.fromEntries(
+  detailedCardIds.map((id, index) => [id, schemes[index]])
+);
+const previousIdsByCardId = Object.fromEntries(
+  detailedCardIds.map((id, index) => [id, `65f0000000000000000000${(index + 1).toString(16).padStart(2, '0')}`])
+);
+
+// This is the catalogue shown by the website. Existing detailed records above are
+// retained and joined by card id; new cards start without inferred eligibility rules.
+const schemeCards = [
+  { id: 'pm-kisan', displayName: 'PM-KISAN', cardCategory: 'Agriculture', category: 'AGRICULTURE', audience: 'For eligible farmer families', description: 'Explore income support for eligible landholding farmer families.', officialUrl: 'https://pmkisan.gov.in/' },
+  { id: 'pm-jay', displayName: 'Ayushman Bharat PM-JAY', cardCategory: 'Health', category: 'HEALTHCARE', audience: 'For eligible families', description: 'Understand health coverage options and how to check your eligibility.', officialUrl: 'https://pmjay.gov.in/' },
+  { id: 'pmay-urban', displayName: 'PM Awas Yojana (Urban)', cardCategory: 'Housing', category: 'HOUSING', audience: 'For eligible urban households', description: 'Review housing assistance information and the official application route.', officialUrl: 'https://pmay-urban.gov.in/' },
+  { id: 'scholarships', displayName: 'National Scholarship Portal', cardCategory: 'Education', category: 'EDUCATION', audience: 'For students across India', description: 'Find scholarship programs and prepare for an application.', officialUrl: 'https://scholarships.gov.in/' },
+  { id: 'pm-ujjwala', displayName: 'PM Ujjwala Yojana', cardCategory: 'Social welfare', category: 'SOCIAL_WELFARE', audience: 'For eligible women in low-income households', description: 'Explore support for a clean cooking fuel connection and find the official application route.', officialUrl: 'https://www.pmuy.gov.in/' },
+  { id: 'mgnrega', displayName: 'Mahatma Gandhi NREGA', cardCategory: 'Employment', category: 'EMPLOYMENT', audience: 'For rural households seeking wage employment', description: 'Learn about the rural employment guarantee and how to request work through your Gram Panchayat.', officialUrl: 'https://nrega.nic.in/' },
+  { id: 'mudra', displayName: 'Pradhan Mantri MUDRA Yojana', cardCategory: 'Business', category: 'FINANCIAL_INCLUSION', audience: 'For micro and small business owners', description: 'Review loan options for starting or growing a small business.', officialUrl: 'https://www.mudra.org.in/' },
+  { id: 'kcc', displayName: 'Kisan Credit Card', cardCategory: 'Agriculture', category: 'AGRICULTURE', audience: 'For farmers and agricultural workers', description: 'Find information about flexible credit for farming and related needs.', officialUrl: 'https://www.myscheme.gov.in/schemes/kcc' },
+  { id: 'ladli-behna', displayName: 'Ladli Behna Yojana', cardCategory: 'Women', category: 'WOMEN_EMPOWERMENT', audience: 'For eligible women in Madhya Pradesh', description: 'Check the state program information and its current application guidance.', officialUrl: 'https://cmladlibahna.mp.gov.in/' },
+  { id: 'atal-pension', displayName: 'Atal Pension Yojana', cardCategory: 'Pension', category: 'PENSION', audience: 'For eligible subscribers aged 18 to 40', description: 'Understand the contributory pension scheme and how to enroll through a bank.', officialUrl: 'https://www.npscra.nsdl.co.in/scheme-details.php' },
+  { id: 'pm-surya-ghar', displayName: 'PM Surya Ghar: Muft Bijli Yojana', cardCategory: 'Energy', category: 'ENERGY', audience: 'For residential electricity consumers', description: 'Explore rooftop solar support and the official national portal.', officialUrl: 'https://pmsuryaghar.gov.in/' },
+  { id: 'sukanya-samriddhi', displayName: 'Sukanya Samriddhi Account', cardCategory: 'Savings', category: 'FINANCIAL_INCLUSION', audience: 'For guardians of a girl child', description: 'Learn about this small savings scheme and account opening through banks or post offices.', officialUrl: 'https://www.indiapost.gov.in/' },
+  { id: 'pm-vishwakarma', displayName: 'PM Vishwakarma', cardCategory: 'Skills', category: 'SKILL_DEVELOPMENT', audience: 'For traditional artisans and craftspeople', description: 'See support options for skills, tools, and credit for traditional trades.', officialUrl: 'https://pmvishwakarma.gov.in/' },
+  { id: 'pmay-gramin', displayName: 'PM Awas Yojana (Gramin)', cardCategory: 'Housing', category: 'HOUSING', audience: 'For eligible rural households', description: 'Review rural housing assistance information and where to check beneficiary details.', officialUrl: 'https://pmayg.nic.in/' },
+  { id: 'pmfby', displayName: 'Pradhan Mantri Fasal Bima Yojana', cardCategory: 'Agriculture', category: 'AGRICULTURE', audience: 'For farmers growing notified crops', description: 'Find crop insurance information and the official enrollment portal.', officialUrl: 'https://pmfby.gov.in/' },
+  { id: 'jan-dhan', displayName: 'Pradhan Mantri Jan Dhan Yojana', cardCategory: 'Banking', category: 'FINANCIAL_INCLUSION', audience: 'For people seeking access to banking services', description: 'Learn about basic bank accounts and financial inclusion services.', officialUrl: 'https://pmjdy.gov.in/' },
+  { id: 'stand-up-india', displayName: 'Stand-Up India', cardCategory: 'Business', category: 'FINANCIAL_INCLUSION', audience: 'For women and SC/ST entrepreneurs', description: 'Explore bank loan support for setting up a greenfield enterprise.', officialUrl: 'https://www.standupmitra.in/' },
+  { id: 'pm-shram-yogi', displayName: 'PM Shram Yogi Maandhan', cardCategory: 'Pension', category: 'PENSION', audience: 'For eligible workers in the unorganized sector', description: 'Review the voluntary contributory pension scheme and enrollment options.', officialUrl: 'https://maandhan.in/' },
+  { id: 'pm-poshan', displayName: 'PM POSHAN', cardCategory: 'Health', category: 'HEALTHCARE', audience: 'For children in eligible schools', description: 'Learn about the school meal program and its nutrition support.', officialUrl: 'https://pmposhan.education.gov.in/' },
+  { id: 'pm-matru-vandana', displayName: 'Pradhan Mantri Matru Vandana Yojana', cardCategory: 'Women', category: 'WOMEN_EMPOWERMENT', audience: 'For eligible pregnant and lactating women', description: 'Find information about maternity benefit support and how to apply.', officialUrl: 'https://pmmvy.wcd.gov.in/' },
+];
+
+export const seedSchemes = schemeCards.map((card, index) => {
+  const details = detailedSchemesByCardId[card.id] || {};
+  const fallbackId = `65f0000000000000000000${(index + 11).toString(16).padStart(2, '0')}`;
+  return {
+    ...details,
+    _id: previousIdsByCardId[card.id] || fallbackId,
+    slug: card.id,
+    name: details.name || card.displayName,
+    displayName: card.displayName,
+    cardCategory: card.cardCategory,
+    audience: card.audience,
+    cardDescription: card.description,
+    displayOrder: index + 1,
+    description: details.description || card.description,
+    category: card.category,
+    department: details.department || '',
+    state: details.state || 'ALL',
+    benefits: details.benefits || '',
+    eligibilityRules: details.eligibilityRules || [],
+    requiredDocuments: details.requiredDocuments || [],
+    applicationProcess: details.applicationProcess || '',
+    officialUrl: card.officialUrl,
+    sourceType: details.sourceType || 'UNVERIFIED',
+    isActive: true,
+  };
+});
 
 export default seedSchemes;
 
 async function seed() {
   try {
-    const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/sevaconnect';
-    await mongoose.connect(uri);
+    await mongoose.connect(env.MONGODB_URI);
     console.log('Connected to MongoDB for seeding.');
 
-    // Clear existing schemes
-    await Scheme.deleteMany({});
-    console.log('Cleared existing schemes.');
+    // Upsert only the curated seed records so unrelated catalogue entries remain untouched.
+    const operations = seedSchemes.map((scheme) => {
+      const { _id, ...fields } = scheme;
+      const slug = fields.slug || fields.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
 
-    // Insert new schemes
-    const created = await Scheme.insertMany(seedSchemes);
-    console.log(`Seeded ${created.length} government schemes.`);
+      return {
+        updateOne: {
+          filter: { _id },
+          update: { $set: { ...fields, slug } },
+          upsert: true,
+        },
+      };
+    });
+    await Scheme.bulkWrite(operations);
+    console.log(`Seeded or updated ${seedSchemes.length} government schemes.`);
 
     await mongoose.disconnect();
     console.log('Seeding complete.');

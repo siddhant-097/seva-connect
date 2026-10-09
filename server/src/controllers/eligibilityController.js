@@ -41,7 +41,7 @@ export const checkSchemeEligibility = async (req, res, next) => {
 export const runRecommendations = async (req, res, next) => {
   try {
     const profile = req.user.profile ? (req.user.profile.toObject ? req.user.profile.toObject() : req.user.profile) : {};
-    const schemes = await Scheme.find({ isActive: true });
+    const schemes = await Scheme.find({ isActive: true, displayOrder: { $gt: 0 } });
 
     const recommendations = evaluateMultipleSchemes(profile, schemes);
 
