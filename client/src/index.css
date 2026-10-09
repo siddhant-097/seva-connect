@@ -1,0 +1,9 @@
+:root { font-synthesis: none; }
+
+body { min-height: 100vh; }
+
+#root { min-height: 100vh; }
+
+h1, h2, h3, p { margin-top: 0; }
+
+::selection { color: #fff; background: #0066cc; }
