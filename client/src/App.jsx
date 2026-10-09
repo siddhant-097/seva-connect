@@ -88,6 +88,26 @@ function formatMarkdownContent(text) {
     )
 }
 
+const PROFILE_STORAGE_KEY = 'sevaconnect.profile.v1'
+
+function readSavedProfile() {
+    try {
+        const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY)
+        if (!raw) return null
+        const parsed = JSON.parse(raw)
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+        return {
+            state: typeof parsed.state === 'string' ? parsed.state : '',
+            age: typeof parsed.age === 'string' || typeof parsed.age === 'number' ? String(parsed.age) : '',
+            gender: typeof parsed.gender === 'string' ? parsed.gender : '',
+            residenceType: typeof parsed.residenceType === 'string' ? parsed.residenceType : '',
+            annualFamilyIncome: typeof parsed.annualFamilyIncome === 'string' || typeof parsed.annualFamilyIncome === 'number' ? String(parsed.annualFamilyIncome) : '',
+            occupation: typeof parsed.occupation === 'string' ? parsed.occupation : '',
+        }
+    } catch {
+        return null
+    }
+}
 function App() {
     const [query, setQuery] = useState('')
     const [activeCategory, setActiveCategory] = useState('All schemes')
@@ -97,7 +117,7 @@ function App() {
     const [showProfile, setShowProfile] = useState(false)
     const [showAssistant, setShowAssistant] = useState(false)
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-    const [profile, setProfile] = useState({
+    const [profile, setProfile] = useState(() => readSavedProfile() || {
         state: '',
         age: '',
         gender: '',
@@ -105,7 +125,7 @@ function App() {
         annualFamilyIncome: '',
         occupation: '',
     })
-    const [profileSaved, setProfileSaved] = useState(false)
+    const [profileSaved, setProfileSaved] = useState(() => readSavedProfile() !== null)
     const [message, setMessage] = useState('')
     const [conversation, setConversation] = useState([])
     const [conversationId, setConversationId] = useState(null)
@@ -323,7 +343,7 @@ function App() {
                     </div>
                     <div className="profile-banner">
                         <div className="profile-banner-icon"><Icon name="user" size={20} /></div>
-                        <div><h3>{profileSaved ? 'Your demo profile is ready' : 'A few details can make a difference.'}</h3><p>{profileSaved ? 'Your information stays in this browser session.' : 'Build a profile to see a more relevant starting point.'}</p></div>
+                        <div><h3>{profileSaved ? 'Your demo profile is ready' : 'A few details can make a difference.'}</h3><p>{profileSaved ? 'Your information is saved in this browser.' : 'Build a profile to see a more relevant starting point.'}</p></div>
                         <button className="button button-secondary" type="button" onClick={() => setShowProfile(true)}>{profileSaved ? 'Edit profile' : 'Build my profile'} <Icon name="arrow" size={16} /></button>
                     </div>
                 </section>
@@ -361,15 +381,24 @@ function App() {
                         <button className="dialog-close" type="button" onClick={() => setShowProfile(false)} aria-label="Close profile form"><Icon name="close" /></button>
                         <p className="eyebrow">A more relevant starting point</p>
                         <h2 id="profile-dialog-title">Build your profile.</h2>
-                        <p className="dialog-lead">Share only what you are comfortable sharing. These details stay in this browser session and are sent with your AI questions, but are not saved to your account.</p>
-                        <form className="profile-form" onSubmit={(event) => { event.preventDefault(); setProfileSaved(true); setShowProfile(false) }}>
+                        <p className="dialog-lead">Share only what you are comfortable sharing. These details are saved in this browser and sent with your AI questions, but are not saved to an account. Clear this browser's site data to remove them.</p>
+                        <form className="profile-form" onSubmit={(event) => {
+                            event.preventDefault()
+                            setProfileSaved(true)
+                            try {
+                                window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile))
+                            } catch {
+                                // Keep the current session usable if browser storage is unavailable.
+                            }
+                            setShowProfile(false)
+                        }}>
                             <label>State or union territory<input value={profile.state} onChange={(event) => setProfile({ ...profile, state: event.target.value })} placeholder="e.g. Maharashtra" required /></label>
                             <label>Age in years<input type="number" min="1" max="120" value={profile.age} onChange={(event) => setProfile({ ...profile, age: event.target.value })} placeholder="e.g. 32" required /></label>
                             <label>Gender<select value={profile.gender} onChange={(event) => setProfile({ ...profile, gender: event.target.value })}><option value="">Prefer not to say</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></label>
                             <label>Residence type<select value={profile.residenceType} onChange={(event) => setProfile({ ...profile, residenceType: event.target.value })}><option value="">Select if known</option><option value="RURAL">Rural</option><option value="URBAN">Urban</option></select></label>
                             <label>Annual family income (INR)<input type="number" min="0" value={profile.annualFamilyIncome} onChange={(event) => setProfile({ ...profile, annualFamilyIncome: event.target.value })} placeholder="Optional" /></label>
                             <label>What best describes you?<select value={profile.occupation} onChange={(event) => setProfile({ ...profile, occupation: event.target.value })} required><option value="" disabled>Select one</option><option value="STUDENT">Student</option><option value="FARMER">Farmer</option><option value="SELF_EMPLOYED">Self-employed</option><option value="EMPLOYED">Employed</option><option value="LOOKING_FOR_WORK">Looking for work</option><option value="OTHER">Other</option></select></label>
-                            <div className="privacy-note"><Icon name="shield" size={17} /><span>These details stay in this browser session and are sent to the configured AI provider when you ask a question. They are not saved as your Atlas profile.</span></div>
+                            <div className="privacy-note"><Icon name="shield" size={17} /><span>These details are saved in this browser and sent to the configured AI provider when you ask a question. They are not saved to an account. Clear this browser's site data to remove them.</span></div>
                             <button className="button button-primary form-submit" type="submit">Save profile <Icon name="arrow" size={16} /></button>
                         </form>
                     </section>
