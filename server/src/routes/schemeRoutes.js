@@ -8,9 +8,17 @@ import {
   getSavedSchemes,
 } from '../controllers/schemeController.js';
 import { checkSchemeEligibility } from '../controllers/eligibilityController.js';
-import { authenticate, optionalAuth } from '../middleware/auth.js';
+import { authenticate, authorize, optionalAuth } from '../middleware/auth.js';
+import validate from '../middleware/validation.js';
+import { managedSchemeSchema } from '../validation/managedSchemeSchema.js';
+import { listManageableSchemes, createManagedScheme, updateManagedScheme } from '../controllers/adminSchemeController.js';
 
 const router = Router();
+
+// Scheme management is restricted to authenticated staff roles.
+router.get('/manage', authenticate, authorize('ADMIN', 'CONTENT_MANAGER'), listManageableSchemes);
+router.post('/', authenticate, authorize('ADMIN', 'CONTENT_MANAGER'), validate(managedSchemeSchema), createManagedScheme);
+router.put('/:schemeId', authenticate, authorize('ADMIN', 'CONTENT_MANAGER'), validate(managedSchemeSchema), updateManagedScheme);
 
 // Public-ish scheme browsing (optionalAuth for personalization)
 router.get('/', optionalAuth, getSchemes);

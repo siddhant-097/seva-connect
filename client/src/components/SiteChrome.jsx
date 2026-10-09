@@ -90,7 +90,7 @@ export function SiteFooter({ sectionPrefix = '' }) {
             <div className="footer-main">
                 <div className="footer-brand"><Brand /><p>Helping people find a clearer path<br />to public support.</p></div>
                 <div className="footer-links"><span>Explore</span><a href={`${sectionPrefix}#discover`}>Find schemes</a><a href={`${sectionPrefix}#how-it-works`}>How it works</a><a href={`${sectionPrefix}#trust`}>Our approach</a></div>
-                <div className="footer-links"><span>Get help</span><a href={`${sectionPrefix}#discover`}>Browse support</a><a href={`${sectionPrefix}#trust`}>Our approach</a></div>
+                <div className="footer-links"><span>Get help</span><a href={`${sectionPrefix}#discover`}>Browse support</a><a href={`${sectionPrefix}#trust`}>Our approach</a><a href="/admin">Admin</a></div>
             </div>
             <div className="footer-legal"><span>© 2026 SevaConnect · Hackathon prototype</span><span>Not an official government website</span></div>
         </footer>
