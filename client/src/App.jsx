@@ -273,10 +273,12 @@ function App() {
             : [...current, schemeId])
     }
 
-    const sendChatMessage = async (textToSend, selectedSchemeId = '') => {
+    const sendChatMessage = async (textToSend, selectedSchemeId = '', { hideUserMessage = false } = {}) => {
         const text = (textToSend || message).trim()
         if (!text || isLoading) return
-        setConversation((current) => [...current, { id: `u_${Date.now()}`, role: 'user', content: text }])
+        if (!hideUserMessage) {
+            setConversation((current) => [...current, { id: `u_${Date.now()}`, role: 'user', content: text }])
+        }
         setMessage('')
         setIsLoading(true)
 
@@ -328,7 +330,7 @@ function App() {
             : profileSaved
             ? 'Explain ' + scheme.name + ' in simple terms. Tell me what it offers, how it may relate to my saved profile, what details I should verify, and how to apply through the official source.'
             : 'Explain ' + scheme.name + ' in simple terms. Tell me what it offers, who it may be for, what details I should verify, and how to apply through the official source.'
-        sendChatMessage(prompt, scheme.id)
+        sendChatMessage(prompt, scheme.id, { hideUserMessage: true })
     }
 
     const clearChat = () => {
