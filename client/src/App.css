@@ -487,7 +487,7 @@ select:focus-visible {
 
 .discovery-controls {
     display: grid;
-    grid-template-columns: minmax(280px, 1fr) auto;
+    grid-template-columns: minmax(280px, 1fr) minmax(220px, auto);
     align-items: center;
     gap: 22px;
     margin-top: 32px;
@@ -538,9 +538,10 @@ select:focus-visible {
 }
 
 .category-list {
+    grid-column: 1 / -1;
     display: flex;
     flex-wrap: wrap;
-    justify-content: end;
+    justify-content: start;
     gap: 7px;
 }
 
@@ -570,6 +571,22 @@ select:focus-visible {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 18px;
     margin-top: 26px;
+}
+
+.myscheme-catalog-link {
+    margin-top: 12px;
+}
+
+.search-field select {
+    width: 100%;
+    min-width: 0;
+    padding: 11px 0;
+    color: var(--ink);
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 14px;
 }
 
 .scheme-pagination {
@@ -1257,11 +1274,83 @@ select:focus-visible {
     font-weight: 600;
 }
 
-.assistant-welcome>p:last-child {
-    margin: 0;
+.assistant-welcome>p {
+    margin: 0 0 14px;
     color: var(--body);
     font-size: 13px;
     line-height: 1.5;
+}
+
+.scheme-data-status {
+    margin: 0.75rem 0 0;
+    color: #805b19;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    font-weight: 600;
+}
+
+.assistant-suggestions-loading {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.assistant-scheme-list {
+    display: grid;
+    gap: 7px;
+}
+
+.assistant-scheme-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 11px;
+    color: var(--ink);
+    text-align: left;
+    border: 1px solid #d8e0e4;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.assistant-scheme-option:hover:not(:disabled) {
+    border-color: var(--blue);
+    background: #f7fbfd;
+    transform: translateY(-1px);
+}
+
+.assistant-scheme-option:focus-visible {
+    outline: 3px solid rgba(35, 108, 147, 0.2);
+    outline-offset: 2px;
+}
+
+.assistant-scheme-option:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.assistant-scheme-option-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.assistant-scheme-option-copy strong {
+    font-size: 13px;
+}
+
+.assistant-scheme-option-copy span,
+.assistant-scheme-option-copy small {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.assistant-scheme-option-copy small {
+    color: #7c5d12;
 }
 
 .conversation-turn {

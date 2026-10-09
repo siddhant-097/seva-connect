@@ -6,7 +6,7 @@ import { sendSuccess, sendError } from '../utils/response.js';
  */
 export const chat = async (req, res, next) => {
   try {
-    const { conversationId, message, language, profile } = req.body;
+    const { conversationId, selectedSchemeId, message, language, profile } = req.body;
 
     if (!message || message.trim().length === 0) {
       return sendError(res, 400, 'EMPTY_MESSAGE', 'Message cannot be empty.');
@@ -16,6 +16,7 @@ export const chat = async (req, res, next) => {
       user: req.user || null,
       profile: profile || null,
       conversationId,
+      selectedSchemeId,
       message: message.trim(),
       language: language || 'en',
     });
@@ -34,6 +35,19 @@ export const getAIStatus = async (_req, res, next) => {
   try {
     const info = aiService.getAIStatusInfo();
     return sendSuccess(res, info);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/ai/recommendations
+ * Return profile-based scheme suggestions without requiring a chat message.
+ */
+export const getSchemeRecommendationsHandler = async (req, res, next) => {
+  try {
+    const result = await aiService.getSchemeRecommendations(req.body.profile || {});
+    return sendSuccess(res, result);
   } catch (error) {
     next(error);
   }

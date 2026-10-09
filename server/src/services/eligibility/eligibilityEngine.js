@@ -111,16 +111,6 @@ export function evaluateEligibility(userProfile, scheme) {
     const profile = deriveProfileFields(userProfile);
     const rules = [...(scheme.eligibilityRules || [])];
 
-    if (rules.length === 0) {
-        return {
-            status: 'POTENTIALLY_RELEVANT',
-            score: 0.5,
-            matchedCriteria: [],
-            failedCriteria: [],
-            needsVerification: ['all_criteria'],
-        };
-    }
-
     // Also check state matching if scheme.state !== 'ALL'
     if (scheme.state && scheme.state !== 'ALL') {
         const stateRule = { field: 'state', operator: 'eq', value: scheme.state };
@@ -134,6 +124,16 @@ export function evaluateEligibility(userProfile, scheme) {
     const failed = [];
     const needs = [];
 
+    if (rules.length === 0) {
+        return {
+            status: 'NEEDS_VERIFICATION',
+            score: 0,
+            matchedCriteria: [],
+            failedCriteria: [],
+            needsVerification: ['all_criteria'],
+        };
+    }
+
     for (const rule of rules) {
         const result = evaluateRule(rule, profile);
         if (result === 'match') {
@@ -145,7 +145,14 @@ export function evaluateEligibility(userProfile, scheme) {
         }
     }
 
-    const total = rules.length;
+    // Imported records contain narrative criteria rather than reviewed rules.
+    // Run any structured rules available, but keep the remaining criteria visible as unknown.
+    const hasUnstructuredImportedCriteria = scheme.sourceType === 'UNVERIFIED' && !(scheme.eligibilityRules || []).length;
+    if (hasUnstructuredImportedCriteria) {
+        needs.push('all_criteria');
+    }
+
+    const total = rules.length + (hasUnstructuredImportedCriteria ? 1 : 0);
     const score = total > 0 ? matched.length / total : 0;
 
     let status;

@@ -12,8 +12,8 @@ export const getSchemes = async (req, res, next) => {
       q,
       category,
       state,
-      page: Number(page) || 1,
-      limit: Number(limit) || 20,
+      page: Math.max(1, Number.parseInt(page, 10) || 1),
+      limit: Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 20)),
     });
 
     return sendSuccess(res, result);

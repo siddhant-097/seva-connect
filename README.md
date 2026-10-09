@@ -55,11 +55,24 @@ Load or refresh the curated scheme records with:
 
 This command upserts the curated seed records; it does not clear the schemes collection. Public catalogue browsing can fall back to in-memory seed data if MongoDB is unavailable. Admin writes require a live database.
 
+For a larger catalogue, prepare a JSON array using `server/data/schemes.import.example.json` as a shape example. Each record needs a name, factual description, supported category, and official application/source URL; include its state and a reference URL where available. Do not fill in eligibility rules unless they have been checked against an authoritative source. Run a preview first, then apply it:
+
+    npm run import:schemes --workspace server -- data/my-schemes.json
+    npm run import:schemes --workspace server -- data/my-schemes.json apply
+
+The importer validates the full file and duplicate slugs before writing. Preview is the default. Add the word `apply` to write records; imported records are hidden from public browsing until reviewed and activated in `/admin`. Existing slugs are skipped; add `update-existing` only when you intend to replace their imported fields. The importer never deletes records.
+
+### Study dataset currently in MongoDB
+
+For study and learning, the project imported the JSON from [Aryan-Pardeshi/gov-myscheme-dataset](https://github.com/Aryan-Pardeshi/gov-myscheme-dataset). Its README claims 2,066 records and an Apache-2.0 license, and says the data was extracted from myScheme. Five records matched existing scheme slugs, so 2,061 records were added. They are published in the catalogue as `UNVERIFIED` listings and are included in profile evaluation. Since their eligibility rules are narrative text rather than reviewed structured rules, the eligibility engine checks supported structured criteria such as state and reports remaining criteria as needing verification. With a citizen profile, the assistant searches the full imported dataset and ranks a short list using state and profile keywords, then can explain a selected record using its stored eligibility, exclusion, document, FAQ, and application text.
+
+This is community-provided study data, not an official API or government-verified feed. Confirm rights to reuse and check each record and application URL before activating or redistributing it. myScheme's [Terms of Use](https://www.myscheme.gov.in/terms-of-use) say automated copying of its pages requires written authorization.
+
 ## Visitor workflows
 
 ### Browse schemes
 
-The client requests GET /api/v1/schemes?limit=100 when the page loads. The backend reads active catalogue entries from MongoDB and sorts them by display order. The client renders cards, then performs text search, category filtering, and pagination in the browser. If the API request fails or returns no schemes, the client uses bundled fallback cards.
+The client requests one page at a time from GET /api/v1/schemes, passing search text, category, state, page, and page size. MongoDB does the filtering and pagination, so the page can browse a large catalogue without downloading every record. Search, category, state, and previous/next page controls are available. A separate link opens myScheme for visitors who want to browse its full catalogue; SevaConnect does not copy myScheme's catalogue. If the API is unavailable, the client uses bundled sample cards.
 
 The seed catalogue contains 20 cards. Detailed eligibility rules and required documents are supplied only where the project has those details; the remaining cards do not get inferred rules. Scheme links direct users to official sources; SevaConnect itself does not submit applications.
 
@@ -71,7 +84,9 @@ When a user asks the AI a question, the profile is sent with that chat request. 
 
 ### AI chat and Ollama
 
-The client sends the question, selected language, optional profile, and current conversation ID to POST /api/v1/ai/chat. The backend loads the catalogue, applies deterministic eligibility rules if a profile was sent, selects relevant scheme facts, and builds a grounded prompt containing those facts, the match information, a language instruction, and the user's question.
+When the assistant opens, the client requests scheme suggestions from POST /api/v1/ai/recommendations. If a profile is available, the backend ranks schemes with the deterministic eligibility rules; otherwise it shows popular catalogue entries. Tapping a scheme starts an explanation automatically, so visitors can explore without typing first, then ask follow-up questions in the chat box.
+
+For a chat turn, the client sends the question, selected language, optional profile, optional selected scheme ID, and current conversation ID to POST /api/v1/ai/chat. The backend loads the catalogue, applies deterministic eligibility rules if a profile was sent, selects relevant scheme facts, and builds a grounded prompt containing those facts, the match information, a language instruction, and the user's question. When the visitor taps a scheme card, the selected scheme ID keeps the assistant's answer focused on that scheme.
 
 The rules engine computes the match. The language model produces an explanation and is instructed not to make official eligibility decisions.
 
@@ -167,6 +182,7 @@ All routes below use /api/v1 unless stated otherwise.
 | GET or POST /api/v1/users/me/applications | Signed in | List or start application tracking. |
 | GET or PATCH /api/v1/users/me/applications/:applicationId | Signed in | Read or advance an owned application. |
 | GET /api/v1/ai/status | Public | Report AI configuration. |
+| POST /api/v1/ai/recommendations | Public | Return profile-ranked suggestions or popular schemes without a chat prompt. |
 | POST /api/v1/ai/chat | Guest or signed in | Chat with optional profile, language, and conversation ID. |
 | POST /api/v1/ai/explain-scheme | Guest or signed in | Request a scheme explanation. |
 | POST /api/v1/ai/explain-eligibility | Guest or signed in | Request eligibility explanation. |

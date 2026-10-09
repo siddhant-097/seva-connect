@@ -13,7 +13,7 @@ const requiredDocument = z.object({
 }).strict();
 
 export const managedSchemeSchema = z.object({
-  name: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1).max(300),
   displayName: z.string().trim().min(1).max(160),
   category: z.enum(['AGRICULTURE', 'EDUCATION', 'HEALTHCARE', 'HOUSING', 'EMPLOYMENT', 'ENERGY', 'SOCIAL_WELFARE', 'WOMEN_EMPOWERMENT', 'FINANCIAL_INCLUSION', 'PENSION', 'INSURANCE', 'SKILL_DEVELOPMENT', 'OTHER']),
   cardCategory: z.string().trim().min(1).max(80),

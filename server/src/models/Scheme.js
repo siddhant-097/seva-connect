@@ -60,6 +60,12 @@ const schemeSchema = new mongoose.Schema(
       default: 'ALL', // 'ALL' means central/national
     },
     benefits: { type: String, default: '' },
+    tags: [{ type: String, trim: true }],
+    eligibilityText: { type: String, default: '' },
+    exclusionsText: { type: String, default: '' },
+    documentsText: { type: String, default: '' },
+    faqText: { type: String, default: '' },
+    applicationMode: { type: String, default: '' },
     eligibilityRules: [eligibilityRuleSchema],
     requiredDocuments: [
       {
@@ -70,6 +76,9 @@ const schemeSchema = new mongoose.Schema(
     ],
     applicationProcess: { type: String, default: '' },
     officialUrl: { type: String, default: '' },
+    sourceUrl: { type: String, default: '' },
+    dataSource: { type: String, default: '' },
+    dataSourceUrl: { type: String, default: '' },
     sourceType: {
       type: String,
       enum: ['OFFICIAL', 'VERIFIED', 'UNVERIFIED'],

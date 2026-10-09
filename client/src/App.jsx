@@ -45,7 +45,7 @@ const fallbackSchemes = [
     { id: 'mgnrega', name: 'Mahatma Gandhi NREGA', category: 'Employment', audience: 'For rural households seeking wage employment', description: 'Learn about the rural employment guarantee and how to request work through your Gram Panchayat.', source: 'https://nrega.nic.in/', mark: '06' },
     { id: 'mudra', name: 'Pradhan Mantri MUDRA Yojana', category: 'Business', audience: 'For micro and small business owners', description: 'Review loan options for starting or growing a small business.', source: 'https://www.mudra.org.in/', mark: '07' },
     { id: 'kcc', name: 'Kisan Credit Card', category: 'Agriculture', audience: 'For farmers and agricultural workers', description: 'Find information about flexible credit for farming and related needs.', source: 'https://www.myscheme.gov.in/schemes/kcc', mark: '08' },
-    { id: 'ladli-behna', name: 'Ladli Behna Yojana', category: 'Women', audience: 'For eligible women in Madhya Pradesh', description: 'Check the state program information and its current application guidance.', source: 'https://cmladlibahna.mp.gov.in/', mark: '09' },
+    { id: 'ladli-behna', name: 'Ladli Behna Yojana', category: 'Women', state: 'Madhya Pradesh', audience: 'For eligible women in Madhya Pradesh', description: 'Check the state program information and its current application guidance.', source: 'https://cmladlibahna.mp.gov.in/', mark: '09' },
     { id: 'atal-pension', name: 'Atal Pension Yojana', category: 'Pension', audience: 'For eligible subscribers aged 18 to 40', description: 'Understand the contributory pension scheme and how to enroll through a bank.', source: 'https://www.npscra.nsdl.co.in/scheme-details.php', mark: '10' },
     { id: 'pm-surya-ghar', name: 'PM Surya Ghar: Muft Bijli Yojana', category: 'Energy', audience: 'For residential electricity consumers', description: 'Explore rooftop solar support and the official national portal.', source: 'https://pmsuryaghar.gov.in/', mark: '11' },
     { id: 'sukanya-samriddhi', name: 'Sukanya Samriddhi Account', category: 'Savings', audience: 'For guardians of a girl child', description: 'Learn about this small savings scheme and account opening through banks or post offices.', source: 'https://www.indiapost.gov.in/', mark: '12' },
@@ -60,13 +60,7 @@ const fallbackSchemes = [
 ]
 
 const schemesPerPage = 6
-
-const quickPrompts = [
-    { label: 'PM-KISAN eligibility', query: 'Am I eligible for PM-KISAN and what documents do I need?' },
-    { label: 'Ayushman Bharat cover', query: 'How does Ayushman Bharat PM-JAY health coverage work?' },
-    { label: 'Housing assistance', query: 'What are the rules and process for PM Awas Yojana?' },
-    { label: 'Student scholarships', query: 'What scholarships are available for students?' },
-]
+const IndianStates = ['Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry']
 
 function formatMarkdownContent(text) {
     if (!text) return null
@@ -107,6 +101,17 @@ function readSavedProfile() {
         return null
     }
 }
+
+function toAssistantProfile(profile) {
+    return {
+        ...profile,
+        age: Number(profile.age),
+        annualFamilyIncome: profile.annualFamilyIncome === '' ? undefined : Number(profile.annualFamilyIncome),
+        isFarmer: profile.occupation === 'FARMER',
+        isStudent: profile.occupation === 'STUDENT',
+    }
+}
+
 function formatCategory(category) {
     return String(category || 'Other')
         .toLowerCase()
@@ -119,7 +124,10 @@ function App() {
     const [catalogFallback, setCatalogFallback] = useState(false)
     const [query, setQuery] = useState('')
     const [activeCategory, setActiveCategory] = useState('All schemes')
+    const [activeState, setActiveState] = useState('ALL')
     const [currentPage, setCurrentPage] = useState(1)
+    const [pagination, setPagination] = useState({ total: fallbackSchemes.length, totalPages: Math.ceil(fallbackSchemes.length / schemesPerPage) })
+    const [catalogueLoading, setCatalogueLoading] = useState(false)
     const [saved, setSaved] = useState([])
     const [selectedScheme, setSelectedScheme] = useState(null)
     const [showProfile, setShowProfile] = useState(false)
@@ -137,6 +145,8 @@ function App() {
     const [message, setMessage] = useState('')
     const [conversation, setConversation] = useState([])
     const [conversationId, setConversationId] = useState(null)
+    const [assistantSuggestions, setAssistantSuggestions] = useState({ schemes: [], personalized: false, hasMatches: false })
+    const [loadingAssistantSuggestions, setLoadingAssistantSuggestions] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     const [aiLanguage, setAiLanguage] = useState('en')
     const [aiStatus, setAiStatus] = useState({ activeModel: 'SevaConnect AI', activeProvider: 'builtin', isOpenSource: true })
@@ -155,51 +165,107 @@ function App() {
     useEffect(() => {
         let isCurrent = true
 
-        fetch('/api/v1/schemes?limit=100')
+        const loadCatalogue = async () => {
+            setCatalogueLoading(true)
+            const params = new URLSearchParams({ page: String(currentPage), limit: String(schemesPerPage) })
+            if (query.trim()) params.set('q', query.trim())
+            if (activeState !== 'ALL') params.set('state', activeState)
+            if (activeCategory !== 'All schemes') params.set('category', activeCategory.toUpperCase().replaceAll(' ', '_'))
+
+            fetch(`/api/v1/schemes?${params}`)
             .then((response) => {
                 if (!response.ok) throw new Error(`Scheme API returned ${response.status}`)
                 return response.json()
             })
             .then((payload) => {
                 const records = payload?.data?.schemes
-                if (!payload?.success || !Array.isArray(records) || records.length === 0) {
-                    throw new Error('Scheme API returned no catalogue records')
-                }
+                if (!payload?.success || !Array.isArray(records)) throw new Error('Scheme API returned an invalid catalogue response')
 
                 const catalogue = records.map((scheme, index) => ({
                     id: scheme.slug || scheme.id || scheme._id || `scheme-${index + 1}`,
                     name: scheme.displayName || scheme.name,
                     category: scheme.cardCategory || formatCategory(scheme.category),
+                    categoryKey: scheme.category,
+                    state: scheme.state || 'ALL',
                     audience: scheme.audience || 'Check the official source for details',
                     description: scheme.cardDescription || scheme.description,
                     source: scheme.officialUrl,
+                    sourceType: scheme.sourceType || 'OFFICIAL',
                     mark: String(scheme.displayOrder || index + 1).padStart(2, '0'),
                 }))
 
                 if (isCurrent) {
                     setSchemes(catalogue)
+                    setPagination(payload.data.pagination || { total: catalogue.length, totalPages: 1 })
                     setCatalogFallback(false)
-                    setCurrentPage(1)
                 }
             })
             .catch(() => {
-                if (isCurrent) setCatalogFallback(true)
+                if (isCurrent) {
+                    setSchemes(fallbackSchemes)
+                    setCatalogFallback(true)
+                    setPagination({ total: fallbackSchemes.length, totalPages: Math.ceil(fallbackSchemes.length / schemesPerPage) })
+                }
             })
+            .finally(() => { if (isCurrent) setCatalogueLoading(false) })
+        }
 
-        return () => { isCurrent = false }
-    }, [])
+        const debounce = setTimeout(loadCatalogue, query.trim() ? 250 : 0)
+
+        return () => { isCurrent = false; clearTimeout(debounce) }
+    }, [currentPage, query, activeCategory, activeState])
     useEffect(() => {
         if (showAssistant) threadEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [conversation, isLoading, showAssistant])
 
-    const categories = ['All schemes', ...new Set(schemes.map((scheme) => scheme.category))]
-    const filteredSchemes = schemes.filter((scheme) => {
+    useEffect(() => {
+        if (!showAssistant) return undefined
+        let isCurrent = true
+        setLoadingAssistantSuggestions(true)
+
+        fetch('/api/v1/ai/recommendations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile: profileSaved ? toAssistantProfile(profile) : {} }),
+        })
+            .then((response) => response.json().then((payload) => {
+                if (!response.ok || !payload?.success) throw new Error(payload?.error?.message || 'Could not load scheme suggestions.')
+                return payload.data
+            }))
+            .then((data) => {
+                if (isCurrent) setAssistantSuggestions(data)
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setAssistantSuggestions({
+                        schemes: schemes.slice(0, 8).map((scheme) => ({
+                            id: scheme.id,
+                            name: scheme.name,
+                            category: scheme.category,
+                            audience: scheme.audience,
+                            description: scheme.description,
+                            officialUrl: scheme.source,
+                            status: '',
+                        })),
+                        personalized: false,
+                        hasMatches: false,
+                    })
+                }
+            })
+            .finally(() => { if (isCurrent) setLoadingAssistantSuggestions(false) })
+
+        return () => { isCurrent = false }
+    }, [showAssistant, profileSaved, profile, schemes])
+
+    const categories = ['All schemes', 'Agriculture', 'Education', 'Healthcare', 'Housing', 'Employment', 'Energy', 'Social Welfare', 'Women Empowerment', 'Financial Inclusion', 'Pension', 'Insurance', 'Skill Development', 'Other']
+    const filteredSchemes = catalogFallback ? schemes.filter((scheme) => {
         const matchesCategory = activeCategory === 'All schemes' || scheme.category === activeCategory
         const searchText = `${scheme.name} ${scheme.category} ${scheme.audience} ${scheme.description}`.toLowerCase()
-        return matchesCategory && searchText.includes(query.trim().toLowerCase())
-    })
-    const pageCount = Math.ceil(filteredSchemes.length / schemesPerPage)
-    const visibleSchemes = filteredSchemes.slice((currentPage - 1) * schemesPerPage, currentPage * schemesPerPage)
+        const matchesState = activeState === 'ALL' || !scheme.state || scheme.state === 'ALL' || scheme.state.toLowerCase() === activeState.toLowerCase()
+        return matchesCategory && matchesState && searchText.includes(query.trim().toLowerCase())
+    }) : schemes
+    const pageCount = catalogFallback ? Math.ceil(filteredSchemes.length / schemesPerPage) : pagination.totalPages
+    const visibleSchemes = catalogFallback ? filteredSchemes.slice((currentPage - 1) * schemesPerPage, currentPage * schemesPerPage) : schemes
 
     const toggleSaved = (schemeId) => {
         setSaved((current) => current.includes(schemeId)
@@ -207,7 +273,7 @@ function App() {
             : [...current, schemeId])
     }
 
-    const sendChatMessage = async (textToSend) => {
+    const sendChatMessage = async (textToSend, selectedSchemeId = '') => {
         const text = (textToSend || message).trim()
         if (!text || isLoading) return
         setConversation((current) => [...current, { id: `u_${Date.now()}`, role: 'user', content: text }])
@@ -222,13 +288,8 @@ function App() {
                     message: text,
                     language: aiLanguage,
                     ...(conversationId ? { conversationId } : {}),
-                    profile: profileSaved ? {
-                        ...profile,
-                        age: Number(profile.age),
-                        annualFamilyIncome: profile.annualFamilyIncome === '' ? undefined : Number(profile.annualFamilyIncome),
-                        isFarmer: profile.occupation === 'FARMER',
-                        isStudent: profile.occupation === 'STUDENT',
-                    } : undefined,
+                    ...(selectedSchemeId ? { selectedSchemeId } : {}),
+                    profile: profileSaved ? toAssistantProfile(profile) : undefined,
                 }),
             })
             const payload = await response.json()
@@ -259,6 +320,15 @@ function App() {
     const handleFormSubmit = (event) => {
         event.preventDefault()
         sendChatMessage()
+    }
+
+    const selectAssistantScheme = (scheme) => {
+        const prompt = scheme.status === 'UNVERIFIED_CANDIDATE'
+            ? 'Summarize only what the imported record says about ' + scheme.name + '. Clearly say this listing is unverified, do not decide or imply that I am eligible, and direct me to check the linked source before relying on it.'
+            : profileSaved
+            ? 'Explain ' + scheme.name + ' in simple terms. Tell me what it offers, how it may relate to my saved profile, what details I should verify, and how to apply through the official source.'
+            : 'Explain ' + scheme.name + ' in simple terms. Tell me what it offers, who it may be for, what details I should verify, and how to apply through the official source.'
+        sendChatMessage(prompt, scheme.id)
     }
 
     const clearChat = () => {
@@ -307,6 +377,7 @@ function App() {
                             <p className="eyebrow">Start with a possibility</p>
                             <h2>Explore support that fits your life.</h2>
                             <p className="section-lead">Browse a few popular starting points, or search across the catalog.</p>
+                            <a className="text-link myscheme-catalog-link" href="https://www.myscheme.gov.in/search" target="_blank" rel="noopener noreferrer">Browse the full catalogue on myScheme <Icon name="external" size={14} /></a>
                         </div>
                         <span className="catalog-note">{catalogFallback ? 'Showing the sample catalogue because the server is unavailable' : 'Scheme details are for guidance; verify with the official source'}</span>
                     </div>
@@ -315,6 +386,12 @@ function App() {
                         <label className="search-field">
                             <Icon name="search" size={19} />
                             <input value={query} onChange={(event) => { setQuery(event.target.value); setCurrentPage(1) }} placeholder="Search by scheme, need, or category" />
+                        </label>
+                        <label className="search-field" aria-label="Filter schemes by state">
+                            <select value={activeState} onChange={(event) => { setActiveState(event.target.value); setCurrentPage(1) }}>
+                                <option value="ALL">All states and central schemes</option>
+                                {IndianStates.map((state) => <option key={state} value={state}>{state}</option>)}
+                            </select>
                         </label>
                         <div className="category-list" role="group" aria-label="Filter schemes by category">
                             {categories.map((category) => (
@@ -329,12 +406,12 @@ function App() {
                         </div>
                     </div>
 
-                    {filteredSchemes.length ? (
+                    {catalogueLoading ? <div className="empty-state" aria-live="polite">Loading schemes…</div> : (filteredSchemes.length ? (
                         <div className="scheme-grid">
                             {visibleSchemes.map((scheme) => (
                                 <article className="scheme-card" key={scheme.id}>
                                     <div className="scheme-heading">
-                                        <span className="scheme-category">{scheme.category}</span>
+                                        <span className="scheme-category">{scheme.category} · {scheme.state && scheme.state !== 'ALL' ? scheme.state : 'Central'}</span>
                                         <button className={`save-button${saved.includes(scheme.id) ? ' is-saved' : ''}`} type="button" onClick={() => toggleSaved(scheme.id)} aria-label={saved.includes(scheme.id) ? `Remove ${scheme.name} from saved schemes` : `Save ${scheme.name}`} aria-pressed={saved.includes(scheme.id)}>
                                             <Icon name="bookmark" size={18} />
                                         </button>
@@ -343,15 +420,16 @@ function App() {
                                         <p className="scheme-audience">{scheme.audience}</p>
                                         <h3>{scheme.name}</h3>
                                         <p className="scheme-description">{scheme.description}</p>
+                                        {scheme.sourceType === 'UNVERIFIED' && <p className="scheme-data-status">Imported dataset listing · details not independently checked · confirm with source</p>}
                                         <button className="text-link" type="button" onClick={() => setSelectedScheme(scheme)}>Explore scheme <Icon name="arrow" size={16} /></button>
                                     </div>
                                 </article>
                             ))}
                         </div>
                     ) : (
-                        <div className="empty-state"><Icon name="search" size={24} /><h3>No schemes found</h3><p>Try a different search or choose another category.</p><button className="text-link" type="button" onClick={() => { setQuery(''); setActiveCategory('All schemes'); setCurrentPage(1) }}>Clear filters</button></div>
-                    )}
-                    {pageCount > 1 && <nav className="scheme-pagination" aria-label="Scheme pages">
+                        <div className="empty-state"><Icon name="search" size={24} /><h3>No schemes found</h3><p>Try a different search or choose another category.</p><button className="text-link" type="button" onClick={() => { setQuery(''); setActiveCategory('All schemes'); setActiveState('ALL'); setCurrentPage(1) }}>Clear filters</button></div>
+                    ))}
+                    {!catalogueLoading && pageCount > 1 && <nav className="scheme-pagination" aria-label="Scheme pages">
                         <button className="button button-secondary button-small" type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1}>Previous</button>
                         <span aria-live="polite">Page {currentPage} of {pageCount}</span>
                         <button className="button button-secondary button-small" type="button" onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={currentPage === pageCount}>Next</button>
@@ -473,12 +551,12 @@ function App() {
                             </div>
                         </div>
 
-                        {profileSaved && (profile.state || profile.occupation || profile.age) && <div className="assistant-profile-context"><span>Profile: <strong>{[profile.state, profile.occupation, profile.age].filter(Boolean).join(' · ')}</strong></span><button type="button" className="profile-edit-link" onClick={() => { setShowAssistant(false); setShowProfile(true) }}>Edit</button></div>}
+                        {profileSaved && (profile.state || profile.gender || profile.occupation || profile.age) && <div className="assistant-profile-context"><span>Profile: <strong>{[profile.state, profile.gender, profile.occupation, profile.age].filter(Boolean).join(' · ')}</strong></span><button type="button" className="profile-edit-link" onClick={() => { setShowAssistant(false); setShowProfile(true) }}>Edit</button></div>}
 
                         <div className="assistant-thread" role="log" aria-live="polite" aria-label="AI conversation" tabIndex="0">
-                            {conversation.length === 0 && <div className="assistant-welcome"><p className="eyebrow">Namaste · Hello</p><h3>What would you like to understand?</h3><p>Ask about scheme details, documents, or where to apply. I can explain information, not make official eligibility decisions.</p><div className="assistant-chips-label">Popular starting questions</div><div className="assistant-chips">{quickPrompts.map((prompt) => <button key={prompt.query} type="button" className="prompt-chip" onClick={() => sendChatMessage(prompt.query)}>{prompt.label}</button>)}</div></div>}
+                            {conversation.length === 0 && <div className="assistant-welcome"><p className="eyebrow">Namaste · Hello</p><h3>{assistantSuggestions.personalized && assistantSuggestions.hasMatches ? 'Schemes that may fit your profile' : assistantSuggestions.personalized ? 'Explore these schemes' : 'Choose a scheme to explore'}</h3><p>{assistantSuggestions.personalized && assistantSuggestions.hasMatches ? 'Tap a scheme and I’ll explain why it may be relevant, what to verify, and what to do next.' : assistantSuggestions.personalized ? 'The available rules did not find a clear match, but you can still explore these schemes.' : 'Tap a scheme to see its benefits, documents, and official application steps. You can ask a follow-up question after that.'}</p><div className="assistant-chips-label">{loadingAssistantSuggestions ? 'Finding schemes…' : assistantSuggestions.personalized && assistantSuggestions.hasMatches ? 'Possible matches' : 'Schemes to explore'}</div>{loadingAssistantSuggestions ? <p className="assistant-suggestions-loading">Loading scheme suggestions…</p> : <div className="assistant-scheme-list">{assistantSuggestions.schemes.slice(0, 6).map((scheme) => <button key={scheme.id || scheme.name} type="button" className="assistant-scheme-option" onClick={() => selectAssistantScheme(scheme)} disabled={isLoading}><span className="assistant-scheme-option-copy"><strong>{scheme.name}</strong><span>{scheme.category}{scheme.audience ? ' · ' + scheme.audience : ''}</span>{scheme.sourceType === 'UNVERIFIED' && <small>Imported dataset listing · possible option to explore · verify source details</small>}{scheme.status === 'NEEDS_VERIFICATION' && <small>More details need official verification</small>}{scheme.status === 'POTENTIALLY_RELEVANT' && <small>Possible match · verify with the official source</small>}</span><Icon name="arrow" size={16} /></button>)}</div>}</div>}
                             {conversation.map((item) => <div className={`chat-msg ${item.role === 'user' ? 'msg-user' : 'msg-assistant'}`} key={item.id}>
-                                {item.role === 'user' ? <div className="chat-bubble-user">{item.content}</div> : <div className="chat-bubble-assistant"><div className="markdown-body">{formatMarkdownContent(item.content)}</div>{item.sources?.length > 0 && <div className="chat-sources"><span className="chat-sources-label">Official sources:</span>{item.sources.map((source, index) => <a className="source-chip" key={`${source.url}-${index}`} href={source.url} target="_blank" rel="noopener noreferrer">{source.title} <Icon name="external" size={11} /></a>)}</div>}<div className="chat-msg-footer"><span>{item.model || 'SevaConnect AI'}</span><button type="button" className="copy-btn" onClick={() => copyToClipboard(item.content, item.id)} title="Copy response"><Icon name="copy" size={11} /> {copiedId === item.id ? 'Copied!' : 'Copy'}</button></div></div>}
+                                {item.role === 'user' ? <div className="chat-bubble-user">{item.content}</div> : <div className="chat-bubble-assistant"><div className="markdown-body">{formatMarkdownContent(item.content)}</div>{item.sources?.length > 0 && <div className="chat-sources"><span className="chat-sources-label">{item.sources.some((source) => source.sourceType === 'UNVERIFIED') ? 'Imported source to verify:' : 'Official sources:'}</span>{item.sources.map((source, index) => <a className="source-chip" key={`${source.url}-${index}`} href={source.url} target="_blank" rel="noopener noreferrer">{source.title} <Icon name="external" size={11} /></a>)}</div>}<div className="chat-msg-footer"><span>{item.model || 'SevaConnect AI'}</span><button type="button" className="copy-btn" onClick={() => copyToClipboard(item.content, item.id)} title="Copy response"><Icon name="copy" size={11} /> {copiedId === item.id ? 'Copied!' : 'Copy'}</button></div></div>}
                             </div>)}
                             {isLoading && <div className="chat-msg msg-assistant"><div className="chat-bubble-assistant"><div className="typing-dots"><span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" /></div></div></div>}
                             <div ref={threadEndRef} />

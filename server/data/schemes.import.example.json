@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Example State Scheme",
+    "description": "A short factual summary copied from the official scheme source.",
+    "category": "AGRICULTURE",
+    "state": "Maharashtra",
+    "officialUrl": "https://example.gov.in/scheme",
+    "sourceUrl": "https://example.gov.in/scheme-details",
+    "sourceType": "UNVERIFIED",
+    "isActive": false
+  }
+]

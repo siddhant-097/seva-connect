@@ -12,7 +12,7 @@ export async function getAllSchemes({ q, category, state, page = 1, limit = 20 }
     try {
       const filter = { isActive: true, displayOrder: { $gt: 0 } };
       if (category && category !== 'All schemes') filter.category = category.toUpperCase();
-      if (state && state !== 'ALL') filter.state = { $in: [state, 'ALL'] };
+      if (state && state !== 'ALL') filter.state = { $in: [new RegExp(`^${escapeRegex(state)}$`, 'i'), 'ALL'] };
       if (q) filter.$text = { $search: q };
 
       const skip = (page - 1) * limit;
@@ -72,6 +72,10 @@ export async function getAllSchemes({ q, category, state, page = 1, limit = 20 }
       totalPages: Math.ceil(total / limit) || 1,
     },
   };
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export async function getSchemeById(id) {

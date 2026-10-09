@@ -46,13 +46,107 @@ STRICT CITIZEN-SAFETY RULES:
 async function getAvailableSchemes() {
     if (isDBConnected) {
         try {
-            const schemes = await Scheme.find({ isActive: true });
+            const schemes = await Scheme.find({ isActive: true, sourceType: { $ne: 'UNVERIFIED' }, displayOrder: { $gt: 0 } });
             if (schemes && schemes.length > 0) return schemes;
         } catch {
             // Fall through to seedSchemes
         }
     }
     return seedSchemes.filter((s) => s.isActive !== false);
+}
+
+const COMMUNITY_DATA_SOURCE = 'https://github.com/Aryan-Pardeshi/gov-myscheme-dataset';
+
+async function getEligibilitySchemes(curatedSchemes = null) {
+    const curated = curatedSchemes || await getAvailableSchemes();
+    if (!isDBConnected) return curated;
+    const imported = await Scheme.find({ dataSourceUrl: COMMUNITY_DATA_SOURCE, isActive: true })
+        .select('_id name slug displayOrder state sourceType eligibilityRules')
+        .lean();
+    return [...curated, ...imported];
+}
+
+function hasWholeWord(text, term) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text);
+}
+
+function failsKnownNarrativeRequirements(profile, scheme, eligibilityText = '') {
+    const text = eligibilityText.toLowerCase();
+    const age = Number(profile.age);
+    if (Number.isFinite(age) && age > 0) {
+        const range = text.match(/age.{0,100}?\bbetween\s+(\d{1,2})\s+(?:to|and|-)\s*(\d{1,2})\s+years?\s+in\s+general/i)
+            || text.match(/age.{0,60}?\bbetween\s+(\d{1,2})\s+(?:to|and|-)\s*(\d{1,2})\s+years?/i);
+        if (range) {
+            const minAge = Number(range[1]);
+            let maxAge = Number(range[2]);
+            const specialMax = text.match(/(?:age relaxation|relaxation in age|age limit)\s+(?:is\s+)?(?:up to|upto)\s+(\d{1,2})\s+years?/i);
+            const specialCategory = /^female$/i.test(String(profile.gender || '').trim())
+                || /\b(sc|st|obc|bc|mbc|ex.?servicemen|transgender|differently abled|disabilit)\b/i.test(String(profile.category || ''));
+            if (specialCategory && specialMax) maxAge = Number(specialMax[1]);
+            if (age < minAge || age > maxAge) return true;
+        } else {
+            const minAge = text.match(/(?:above|over|at least|minimum age(?: of)?)\s+(\d{1,2})\s+years?/i);
+            const maxAge = text.match(/(?:up to|upto|below|under|maximum age(?: of)?)\s+(\d{1,2})\s+years?/i);
+            if (minAge && age < Number(minAge[1])) return true;
+            if (maxAge && age > Number(maxAge[1])) return true;
+        }
+    }
+
+    const gender = String(profile.gender || '').trim().toLowerCase();
+    const requirements = [scheme.name, scheme.cardDescription, scheme.audience, eligibilityText].filter(Boolean).join(' ');
+    if (/^(male|man)$/.test(gender) && /\b(?:only women|women only|only female|female applicants only|working women|for women applicants)\b/i.test(requirements)) return true;
+    if (/^(female|woman)$/.test(gender) && /\b(?:only men|men only|only male|male applicants only)\b/i.test(requirements)) return true;
+    return false;
+}
+
+async function getUnverifiedCandidates(profile = {}) {
+    if (!isDBConnected) return [];
+    const state = String(profile.state || '').trim().toLowerCase();
+    const occupation = String(profile.occupation || '').replaceAll('_', ' ').toLowerCase();
+    const terms = [];
+    if (profile.isFarmer || /farm/.test(occupation)) terms.push('farmer', 'agriculture', 'agricultural', 'kisan', 'crop');
+    if (profile.isStudent || /student/.test(occupation)) terms.push('student', 'education', 'scholarship', 'school');
+    if (/women|woman|female/.test(String(profile.gender || '').toLowerCase())) terms.push('women', 'woman', 'girl', 'female');
+    if (/self.?employed/.test(occupation)) terms.push('entrepreneur', 'business', 'enterprise', 'self-employed', 'startup', 'micro enterprise');
+    else if (/looking for work|unemployed|job seeker/.test(occupation)) terms.push('unemployed', 'job seeker', 'employment generation', 'livelihood');
+    else if (/employed|worker/.test(occupation)) terms.push('worker', 'employee', 'labour', 'labor', 'employment');
+    else if (occupation && !/farm|student/.test(occupation)) terms.push(...occupation.split(/\s+/).filter((term) => term.length > 3));
+    if (profile.residenceType) terms.push(String(profile.residenceType).toLowerCase());
+    const stateFilter = state ? { $or: [{ state: profile.state }, { state: 'ALL' }] } : {};
+    const maleProfile = /^(male|man)$/i.test(String(profile.gender || '').trim());
+    const femaleProfile = /^(female|woman)$/i.test(String(profile.gender || '').trim());
+    const genderExclusions = maleProfile
+        ? [{ name: /\b(women|woman|female|girls?)\b/i }, { tags: /\b(women|woman|female|girls?)\b/i }, { cardDescription: /\b(women|woman|female|girls?)\b/i }]
+        : femaleProfile
+            ? [{ name: /\b(men|male|boys?)\b/i }, { tags: /\b(men|male|boys?)\b/i }, { cardDescription: /\b(men|male|boys?)\b/i }]
+            : [];
+    const candidates = await Scheme.find({
+        dataSourceUrl: COMMUNITY_DATA_SOURCE,
+        isActive: true,
+        ...stateFilter,
+        ...(genderExclusions.length ? { $nor: genderExclusions } : {}),
+    })
+        .select('name slug category cardCategory cardDescription audience state tags officialUrl sourceUrl sourceType')
+        .lean();
+    const rankedCandidates = candidates.map((scheme) => {
+        const schemeState = String(scheme.state || 'ALL').trim().toLowerCase();
+        const stateMatch = !state || schemeState === 'all' || schemeState === state || state.includes(schemeState) || schemeState.includes(state);
+        const haystack = [scheme.name, scheme.category, scheme.cardCategory, scheme.cardDescription, scheme.audience,
+            ...(scheme.tags || [])].filter(Boolean).join(' ');
+        const matchedTerms = [...new Set(terms)].filter((term) => hasWholeWord(haystack, term));
+        const score = (schemeState === state && state ? 5 : schemeState === 'all' ? 1 : 0) + matchedTerms.length;
+        return { scheme, score, stateMatch, matchedTerms };
+    }).filter((item) => item.stateMatch)
+        .sort((a, b) => b.score - a.score || (a.scheme.name || '').localeCompare(b.scheme.name || ''))
+        .slice(0, 40);
+    const detailedCandidates = rankedCandidates.length
+        ? await Scheme.find({ _id: { $in: rankedCandidates.map(({ scheme }) => scheme._id) } }).select('_id eligibilityText').lean()
+        : [];
+    const eligibilityById = new Map(detailedCandidates.map((scheme) => [String(scheme._id), scheme.eligibilityText || '']));
+    return rankedCandidates
+        .filter(({ scheme }) => !failsKnownNarrativeRequirements(profile, scheme, eligibilityById.get(String(scheme._id))))
+        .slice(0, 5);
 }
 
 function buildUserProfileContext(user) {
@@ -93,15 +187,21 @@ function buildSchemeContext(schemes, max = 8) {
             .join('\n');
 
         return `=== SCHEME: ${s.name} ===
+Data status: ${s.sourceType === 'UNVERIFIED' ? 'UNVERIFIED COMMUNITY DATA; do not present as confirmed facts or eligibility' : 'curated record'}
 Category: ${s.category}
 Department: ${s.department || 'Government of India'}
 State: ${s.state || 'ALL (National)'}
 Description: ${s.description}
 Benefits: ${s.benefits || 'See scheme overview'}
-Application Process: ${s.applicationProcess || 'Apply online or at nearest CSC centre'}
-Official Website: ${s.officialUrl || 'N/A'}
+Eligibility text from dataset: ${s.eligibilityText || 'Not provided'}
+Exclusions text from dataset: ${s.exclusionsText || 'Not provided'}
+Documents text from dataset: ${s.documentsText || 'Not provided'}
+Application mode: ${s.applicationMode || 'Not provided'}
+Dataset FAQ text: ${s.faqText || 'Not provided'}
+Application Process: ${s.applicationProcess || (s.sourceType === 'UNVERIFIED' ? 'Not provided in this record' : 'Apply online or at nearest CSC centre')}
+Official Website / source to check: ${s.sourceType === 'UNVERIFIED' ? (s.sourceUrl || s.officialUrl || 'N/A') : (s.officialUrl || 'N/A')}
 Required Documents:
-${docs || '  - Identity proof (Aadhaar)'}`;
+${docs || (s.sourceType === 'UNVERIFIED' ? '  - Not provided in this record' : '  - Identity proof (Aadhaar)')}`;
     }).join('\n\n');
 }
 
@@ -274,10 +374,19 @@ async function callOpenAI({ systemPrompt, messages }) {
 
 // ── Provider 5: Built-in Open-Source Knowledge & Eligibility Engine ──
 // Zero-Key Autonomous Fallback: Ensures the assistant works 100% out of the box!
-function generateBuiltInResponse({ message, language, user, schemes, recommendations, intent }) {
+function generateBuiltInResponse({ message, language, user, schemes, recommendations, intent, selectedScheme = null }) {
     const isHi = language === 'hi';
     const isHinglish = language === 'hinglish';
     const lowerMsg = message.toLowerCase();
+
+    if (selectedScheme?.sourceType === 'UNVERIFIED') {
+        const details = [selectedScheme.description, selectedScheme.benefits, selectedScheme.eligibilityText,
+            selectedScheme.applicationProcess, selectedScheme.documentsText].filter(Boolean).join('\n\n');
+        const source = selectedScheme.sourceUrl || selectedScheme.officialUrl || 'No source link is available.';
+        if (isHi) return `**${selectedScheme.name} — अपुष्ट सूची**\n\nयह जानकारी आयात किए गए डेटासेट से है और आधिकारिक रूप से सत्यापित नहीं है।\n\n${details || 'इस रिकॉर्ड में और जानकारी नहीं है।'}\n\nआवेदन या पात्रता पर भरोसा करने से पहले स्रोत जाँचें: ${source}\n\nयह पात्रता का निर्णय नहीं है।`;
+        if (isHinglish) return `**${selectedScheme.name} — unverified listing**\n\nYeh imported dataset ki information hai, officially verify nahi hui hai.\n\n${details || 'Is record mein aur details nahi hain.'}\n\nApply karne ya eligibility maan-ne se pehle source check karein: ${source}\n\nYeh eligibility decision nahi hai.`;
+        return `**${selectedScheme.name} — unverified listing**\n\nThis record came from an imported dataset and has not been independently verified. The details below are only what that record contains:\n\n${details || 'No additional details are present in this record.'}\n\nCheck the source before relying on it or applying: ${source}\n\nThis is not an eligibility decision.`;
+    }
 
     // Find most relevant schemes based on query keywords
     const matchedSchemes = schemes.filter((s) => {
@@ -402,7 +511,66 @@ function getOrCreateInMemoryConversation(conversationId, language, initialMessag
 }
 
 // ── Main Process Chat Function ────────────────────────────────────
-export async function processChat({ user = null, conversationId = null, message, language = 'en', profile = null }) {
+export async function getSchemeRecommendations(profile = {}) {
+    const schemes = await getAvailableSchemes();
+    const hasProfile = Object.values(profile).some((value) => value !== '' && value !== null && value !== undefined);
+    const evaluationSchemes = hasProfile ? await getEligibilitySchemes(schemes) : schemes;
+    const orderedSchemes = [...schemes].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    let evaluations = [];
+
+    if (hasProfile) {
+        evaluations = evaluateMultipleSchemes(profile, evaluationSchemes);
+    }
+
+    const matchingEvaluations = evaluations.filter((result) => {
+        const scheme = evaluationSchemes.find((item) => String(item._id || item.id) === String(result.schemeId));
+        return scheme?.sourceType !== 'UNVERIFIED' && result.status !== 'NOT_CURRENTLY_MATCHED' && !result.needsVerification.includes('all_criteria');
+    });
+    const candidateRows = hasProfile ? await getUnverifiedCandidates(profile) : [];
+    const chosen = hasProfile && matchingEvaluations.length > 0
+        ? matchingEvaluations.slice(0, 8).map((result) => ({
+            scheme: schemes.find((item) => String(item._id || item.id) === String(result.schemeId)),
+            result,
+        })).filter((item) => item.scheme)
+        : orderedSchemes.slice(0, hasProfile ? 3 : 8).map((scheme) => ({ scheme, result: null }));
+
+    const verified = chosen.slice(0, 3).map(({ scheme, result }) => ({
+        id: scheme.slug || String(scheme._id || scheme.id),
+        name: scheme.displayName || scheme.name,
+        category: scheme.cardCategory || scheme.category,
+        audience: scheme.audience || '',
+        description: scheme.cardDescription || scheme.description || '',
+        officialUrl: scheme.officialUrl || '',
+        status: result?.status || '',
+        matchedCriteria: result?.matchedCriteria || [],
+        needsVerification: result?.needsVerification || [],
+    }));
+    const candidates = candidateRows.map(({ scheme, matchedTerms }) => {
+        const evaluation = evaluations.find((result) => String(result.schemeId) === String(scheme._id || scheme.id));
+        return {
+            id: scheme.slug,
+            name: scheme.displayName || scheme.name,
+            category: scheme.cardCategory || scheme.category,
+            audience: scheme.audience || '',
+            description: scheme.cardDescription || '',
+            officialUrl: scheme.officialUrl || '',
+            sourceUrl: scheme.sourceUrl || '',
+            state: scheme.state || 'ALL',
+            sourceType: scheme.sourceType || 'UNVERIFIED',
+            status: evaluation?.status || 'UNVERIFIED_CANDIDATE',
+            matchedTerms,
+            matchedCriteria: evaluation?.matchedCriteria || [],
+            needsVerification: evaluation?.needsVerification || ['all_criteria'],
+        };
+    });
+    return {
+        personalized: hasProfile,
+        hasMatches: matchingEvaluations.length > 0 || candidates.some((scheme) => scheme.matchedTerms.length > 0),
+        schemes: [...candidates, ...verified].slice(0, 8),
+    };
+}
+
+export async function processChat({ user = null, conversationId = null, message, language = 'en', profile = null, selectedSchemeId = null }) {
     if (!message || message.trim().length === 0) {
         throw new Error('Message cannot be empty.');
     }
@@ -422,11 +590,14 @@ export async function processChat({ user = null, conversationId = null, message,
     const effectiveProfile = (user && user.profile)
         ? (user.profile.toObject ? user.profile.toObject() : user.profile)
         : (profile || {});
+    const evaluationSchemes = Object.keys(effectiveProfile).length > 0
+        ? await getEligibilitySchemes(schemes)
+        : schemes;
 
     // 3. Evaluate eligibility deterministically
     if (Object.keys(effectiveProfile).length > 0) {
         try {
-            recommendations = evaluateMultipleSchemes(effectiveProfile, schemes);
+            recommendations = evaluateMultipleSchemes(effectiveProfile, evaluationSchemes);
         } catch (err) {
             logger.warn('Eligibility evaluation error', { error: err.message });
         }
@@ -439,7 +610,15 @@ export async function processChat({ user = null, conversationId = null, message,
             .map((r) => String(r.schemeId))
     );
 
-    let relevantSchemes = schemes.filter((s) => matchedSchemeIds.has(String(s._id)));
+    let selectedScheme = selectedSchemeId
+        ? schemes.find((scheme) => String(scheme._id || scheme.id) === String(selectedSchemeId) || scheme.slug === selectedSchemeId)
+        : null;
+    if (!selectedScheme && selectedSchemeId && isDBConnected) {
+        selectedScheme = await Scheme.findOne({ slug: selectedSchemeId, dataSourceUrl: COMMUNITY_DATA_SOURCE, isActive: true }).lean();
+    }
+    let relevantSchemes = selectedScheme
+        ? [selectedScheme]
+        : schemes.filter((s) => matchedSchemeIds.has(String(s._id)));
     if (relevantSchemes.length === 0) {
         // If no profile matches, select based on text relevance
         const lower = cleanMessage.toLowerCase();
@@ -454,7 +633,7 @@ export async function processChat({ user = null, conversationId = null, message,
         title: s.name,
         schemeId: String(s._id),
         sourceType: s.sourceType || 'OFFICIAL',
-        url: s.officialUrl || '',
+        url: s.sourceType === 'UNVERIFIED' ? (s.sourceUrl || s.officialUrl || '') : (s.officialUrl || ''),
     }));
 
     // 5. Build RAG Prompt
@@ -476,7 +655,7 @@ ${userContext}
 DETERMINISTIC ELIGIBILITY RESULTS (Authoritative — do not contradict):
 ${eligibilityContext}
 
-VERIFIED SCHEME INFORMATION (Use ONLY these facts):
+SCHEME RECORDS (Use only supplied facts. Explicitly label UNVERIFIED records and never treat them as eligibility decisions):
 ${schemeContext}
 
 CITIZEN'S QUESTION:
@@ -556,6 +735,7 @@ ${cleanMessage}`;
             language,
             user: { profile: effectiveProfile },
             schemes,
+            selectedScheme: selectedScheme?.sourceType === 'UNVERIFIED' ? selectedScheme : null,
             recommendations,
             intent,
         });

@@ -7,6 +7,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed/schemes.js",
+    "import:schemes": "node src/scripts/importSchemes.js",
     "admin:create": "node src/scripts/createAdmin.js",
     "test": "node --test"
   },

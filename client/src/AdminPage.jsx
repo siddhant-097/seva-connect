@@ -42,7 +42,12 @@ export default function AdminPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [schemes, setSchemes] = useState([]);
+  const [schemeQuery, setSchemeQuery] = useState('');
+  const [schemePage, setSchemePage] = useState(1);
+  const [schemePagination, setSchemePagination] = useState({ page: 1, total: 0, totalPages: 0 });
+  const [listRefresh, setListRefresh] = useState(0);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingSource, setEditingSource] = useState(null);
   const [editingId, setEditingId] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -54,13 +59,23 @@ export default function AdminPage() {
   useEffect(() => {
     if (!token) return undefined;
     let current = true;
-    fetch('/api/v1/schemes/manage', { headers: { Authorization: 'Bearer ' + token } })
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setLoadingSchemes(true);
+      const params = new URLSearchParams({ page: String(schemePage), limit: '50' });
+      if (schemeQuery.trim()) params.set('q', schemeQuery.trim());
+      fetch('/api/v1/schemes/manage?' + params, { headers: { Authorization: 'Bearer ' + token }, signal: controller.signal })
       .then(readResponse)
-      .then((data) => { if (current) setSchemes(data.schemes || []); })
-      .catch((requestError) => { if (current) setError(requestError.message); })
+      .then((data) => {
+        if (!current) return;
+        setSchemes(data.schemes || []);
+        setSchemePagination(data.pagination || { page: schemePage, total: (data.schemes || []).length, totalPages: 1 });
+      })
+      .catch((requestError) => { if (current && requestError.name !== 'AbortError') setError(requestError.message); })
       .finally(() => { if (current) setLoadingSchemes(false); });
-    return () => { current = false; };
-  }, [token]);
+    }, schemeQuery.trim() ? 250 : 0);
+    return () => { current = false; clearTimeout(timer); controller.abort(); };
+  }, [token, schemePage, schemeQuery, listRefresh]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -108,12 +123,16 @@ export default function AdminPage() {
       );
       const data = await readResponse(response);
       const saved = data.scheme;
-      setSchemes((current) => editingId
-        ? current.map((item) => item.id === editingId ? saved : item)
-        : [...current, saved].sort((a, b) => a.displayOrder - b.displayOrder));
+      if (editingId) {
+        setSchemes((current) => current.map((item) => item.id === editingId ? { ...item, ...saved } : item));
+      } else {
+        setSchemePage(Math.max(1, Math.ceil(saved.displayOrder / 50)));
+        setListRefresh((value) => value + 1);
+      }
       setShowForm(false);
       setNotice(editingId ? 'Scheme updated.' : 'Scheme added to the catalogue.');
       setForm(EMPTY_FORM);
+      setEditingSource(null);
       setEditingId('');
     } catch (saveError) {
       setError(saveError instanceof SyntaxError ? 'Rules and documents must be valid JSON.' : saveError.message);
@@ -125,21 +144,36 @@ export default function AdminPage() {
   const openNew = () => {
     setEditingId('');
     setForm(EMPTY_FORM);
+    setEditingSource(null);
     setShowForm(true);
     setError('');
     setNotice('');
   };
-  const openEdit = (scheme) => {
-    setEditingId(scheme.id);
-    setForm(toForm(scheme));
-    setShowForm(true);
+  const openEdit = async (scheme) => {
     setError('');
     setNotice('');
+    setLoading(true);
+    try {
+      const response = await fetch('/api/v1/schemes/' + scheme.id, { headers: { Authorization: 'Bearer ' + token } });
+      const data = await readResponse(response);
+      setEditingId(scheme.id);
+      setForm(toForm(data.scheme));
+      setEditingSource(data.scheme);
+      setShowForm(true);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
   };
   const logout = () => {
     setToken('');
     setUser(null);
     setSchemes([]);
+    setSchemeQuery('');
+    setSchemePage(1);
+    setSchemePagination({ page: 1, total: 0, totalPages: 0 });
+    setEditingSource(null);
     setShowForm(false);
     setError('');
     setNotice('');
@@ -179,7 +213,7 @@ export default function AdminPage() {
         {notice && <p className="admin-success" role="status">{notice}</p>}
         {showForm && (
           <form className="admin-scheme-form" onSubmit={handleSave}>
-            <div className="admin-form-heading"><h2>{editingId ? 'Edit scheme' : 'Add a scheme'}</h2><button type="button" className="admin-quiet-button" onClick={() => setShowForm(false)}>Cancel</button></div>
+            <div className="admin-form-heading"><h2>{editingId ? 'Edit scheme' : 'Add a scheme'}</h2><button type="button" className="admin-quiet-button" onClick={() => { setShowForm(false); setEditingSource(null); }}>Cancel</button></div>
             <div className="admin-form-grid">
               <label>Full scheme name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
               <label>Name shown on card<input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} required /></label>
@@ -199,11 +233,13 @@ export default function AdminPage() {
               <label className="admin-span-two">Required documents (JSON)<textarea className="admin-json-field" rows="6" value={form.requiredDocumentsText} onChange={(event) => setForm({ ...form, requiredDocumentsText: event.target.value })} spellCheck="false" /></label>
             </div>
             <p className="admin-form-help">Leave rules or documents as [] when you do not have verified details.</p>
+            {editingSource?.dataSource && <p className="admin-form-help">Dataset provenance: {editingSource.dataSource}. <a href={editingSource.sourceUrl || editingSource.dataSourceUrl} target="_blank" rel="noreferrer">Review source</a></p>}
             <div className="admin-form-actions"><button className="admin-primary-button" type="submit" disabled={saving}>{saving ? 'Saving�' : editingId ? 'Save changes' : 'Add scheme'}</button></div>
           </form>
         )}
         <section className="admin-list-section">
-          <h2>Catalogue entries <span>{schemes.length}</span></h2>
+          <h2>Catalogue entries <span>{schemePagination.total}</span></h2>
+          <label className="admin-search">Search schemes<input type="search" value={schemeQuery} onChange={(event) => { setSchemeQuery(event.target.value); setSchemePage(1); }} placeholder="Name, state, or department" /></label>
           {loadingSchemes ? <p className="admin-empty">Loading schemes�</p> : schemes.length === 0 ? <p className="admin-empty">No schemes found.</p> : (
             <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Scheme</th><th>Category</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>
               {schemes.map((scheme) => (
@@ -217,6 +253,7 @@ export default function AdminPage() {
               ))}
             </tbody></table></div>
           )}
+          {!loadingSchemes && schemePagination.totalPages > 1 && <nav className="admin-pagination" aria-label="Catalogue pages"><button type="button" className="admin-quiet-button" disabled={schemePage <= 1} onClick={() => setSchemePage((page) => Math.max(1, page - 1))}>Previous</button><span>Page {schemePage} of {schemePagination.totalPages}</span><button type="button" className="admin-quiet-button" disabled={schemePage >= schemePagination.totalPages} onClick={() => setSchemePage((page) => Math.min(schemePagination.totalPages, page + 1))}>Next</button></nav>}
         </section>
       </section>
     </main>
