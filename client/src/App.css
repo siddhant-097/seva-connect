@@ -1281,14 +1281,6 @@ select:focus-visible {
     line-height: 1.5;
 }
 
-.scheme-data-status {
-    margin: 0.75rem 0 0;
-    color: #805b19;
-    font-size: 0.82rem;
-    line-height: 1.4;
-    font-weight: 600;
-}
-
 .assistant-suggestions-loading {
     margin: 0;
     color: var(--muted);

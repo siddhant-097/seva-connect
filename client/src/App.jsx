@@ -420,7 +420,6 @@ function App() {
                                         <p className="scheme-audience">{scheme.audience}</p>
                                         <h3>{scheme.name}</h3>
                                         <p className="scheme-description">{scheme.description}</p>
-                                        {scheme.sourceType === 'UNVERIFIED' && <p className="scheme-data-status">Imported dataset listing · details not independently checked · confirm with source</p>}
                                         <button className="text-link" type="button" onClick={() => setSelectedScheme(scheme)}>Explore scheme <Icon name="arrow" size={16} /></button>
                                     </div>
                                 </article>
