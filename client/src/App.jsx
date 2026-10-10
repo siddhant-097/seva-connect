@@ -390,7 +390,7 @@ function App() {
                         <p className="hero-lead">Search public benefit schemes, review the information you may need, and follow links to official application sources.</p>
                         <div className="hero-actions">
                             <a className="button button-primary" href="#discover">Search schemes</a>
-                            <button className="button button-secondary" type="button" onClick={() => setShowAssistant(true)}>Get help understanding a scheme</button>
+                            <button className="button button-secondary" type="button" onClick={() => setShowAssistant(true)}>Find profile relevant schemes</button>
                         </div>
                         <div className="hero-assurance"><Icon name="shield" size={16} /><span>Scheme matches are informational, not official eligibility decisions.</span></div>
                     </div>
@@ -408,9 +408,7 @@ function App() {
                             <p className="eyebrow">Start with a possibility</p>
                             <h2>Explore support that fits your life.</h2>
                             <p className="section-lead">Browse a few popular starting points, or search across the catalog.</p>
-                            <a className="text-link myscheme-catalog-link" href="https://www.myscheme.gov.in/search" target="_blank" rel="noopener noreferrer">Browse the full catalogue on myScheme <Icon name="external" size={14} /></a>
                         </div>
-                        <span className="catalog-note">{catalogFallback ? 'Showing the sample catalogue because the server is unavailable' : 'Scheme details are for guidance; verify with the official source'}</span>
                     </div>
 
                     <div className="discovery-controls">

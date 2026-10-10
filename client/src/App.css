@@ -477,12 +477,14 @@ select:focus-visible {
 }
 
 .catalog-note {
-    max-width: 270px;
+    max-width: none;
+    flex-shrink: 0;
     padding-bottom: 4px;
     color: var(--muted);
     font-size: 12px;
     line-height: 1.5;
     text-align: right;
+    white-space: nowrap;
 }
 
 .discovery-controls {
@@ -1495,6 +1497,7 @@ select:focus-visible {
     .catalog-note {
         max-width: none;
         text-align: left;
+        white-space: normal;
     }
 
     .assistant-inner {
