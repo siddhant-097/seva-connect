@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Brand } from './components/SiteChrome.jsx';
 import './AdminPage.css';
 
 const ACCESS_ROLES = ['ADMIN', 'CONTENT_MANAGER'];
@@ -183,8 +184,8 @@ export default function AdminPage() {
     return (
       <main className="admin-page admin-login-page">
         <section className="admin-login-card">
-          <a className="admin-home-link" href="/">? Back to SevaConnect</a>
-          <p className="admin-eyebrow">SevaConnect � Admin</p>
+          <a className="admin-home-link" href="/">← Back to homepage</a>
+          <p className="admin-eyebrow admin-brand-label">SevaConnect Admin</p>
           <h1>Manage schemes</h1>
           <p className="admin-intro">Sign in with an administrator or content manager account.</p>
           {error && <p className="admin-alert" role="alert">{error}</p>}
@@ -201,8 +202,10 @@ export default function AdminPage() {
   return (
     <main className="admin-page">
       <header className="admin-topbar">
-        <a className="admin-home-link" href="/">? SevaConnect</a>
-        <div><span>{user?.name || user?.email}</span><button type="button" className="admin-quiet-button" onClick={logout}>Sign out</button></div>
+        <div className="admin-topbar-inner">
+          <Brand href="/" />
+          <div className="admin-topbar-actions"><span>{user?.name || user?.email}</span><button type="button" className="admin-quiet-button" onClick={logout}>Sign out</button></div>
+        </div>
       </header>
       <section className="admin-content">
         <div className="admin-heading">
