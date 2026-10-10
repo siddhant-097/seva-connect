@@ -18,6 +18,12 @@ const profileSchema = z.object({
   householdSize: z.number().min(1).optional(),
   isStudent: z.boolean().optional(),
   isFarmer: z.boolean().optional(),
+  educationLevel: z.string().optional(),
+  incomeRange: z.string().optional(),
+  farmerLandAccess: z.string().optional(),
+  farmerLandSize: z.string().optional(),
+  businessStage: z.string().optional(),
+  businessType: z.string().optional(),
 }).strict();
 
 const userUpdateSchema = z.object({

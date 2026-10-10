@@ -96,6 +96,13 @@ function readSavedProfile() {
             residenceType: typeof parsed.residenceType === 'string' ? parsed.residenceType : '',
             annualFamilyIncome: typeof parsed.annualFamilyIncome === 'string' || typeof parsed.annualFamilyIncome === 'number' ? String(parsed.annualFamilyIncome) : '',
             occupation: typeof parsed.occupation === 'string' ? parsed.occupation : '',
+            category: typeof parsed.category === 'string' ? parsed.category : '',
+            educationLevel: typeof parsed.educationLevel === 'string' ? parsed.educationLevel : '',
+            incomeRange: typeof parsed.incomeRange === 'string' ? parsed.incomeRange : '',
+            farmerLandAccess: typeof parsed.farmerLandAccess === 'string' ? parsed.farmerLandAccess : '',
+            farmerLandSize: typeof parsed.farmerLandSize === 'string' ? parsed.farmerLandSize : '',
+            businessStage: typeof parsed.businessStage === 'string' ? parsed.businessStage : '',
+            businessType: typeof parsed.businessType === 'string' ? parsed.businessType : '',
         }
     } catch {
         return null
@@ -140,6 +147,13 @@ function App() {
         residenceType: '',
         annualFamilyIncome: '',
         occupation: '',
+        category: '',
+        educationLevel: '',
+        incomeRange: '',
+        farmerLandAccess: '',
+        farmerLandSize: '',
+        businessStage: '',
+        businessType: '',
     })
     const [profileSaved, setProfileSaved] = useState(() => readSavedProfile() !== null)
     const [message, setMessage] = useState('')
@@ -338,6 +352,14 @@ function App() {
         sendChatMessage(prompt, scheme.id, { hideUserMessage: true })
     }
 
+    const askAssistantAboutCatalogueScheme = () => {
+        if (!selectedScheme) return
+        const scheme = selectedScheme
+        setSelectedScheme(null)
+        setShowAssistant(true)
+        selectAssistantScheme(scheme)
+    }
+
     const clearChat = () => {
         setConversation([])
         setConversationId(null)
@@ -499,7 +521,8 @@ function App() {
                         <p className="dialog-lead">{selectedScheme.description}</p>
                         <div className="dialog-note"><Icon name="shield" size={19} /><p>Eligibility and documents depend on official criteria. This prototype does not make a final eligibility decision.</p></div>
                         <div className="dialog-actions">
-                            <a className="button button-primary" href={selectedScheme.source} target="_blank" rel="noreferrer">Visit official source <Icon name="external" size={15} /></a>
+                            <button className="button button-primary" type="button" onClick={askAssistantAboutCatalogueScheme}><Icon name="sparkles" size={16} /> Ask SevaConnect AI</button>
+                            <a className="button button-secondary" href={selectedScheme.source} target="_blank" rel="noreferrer">Visit official source <Icon name="external" size={15} /></a>
                             <button className="button button-secondary" type="button" onClick={() => { setSelectedScheme(null); setShowProfile(true) }}>Check my profile</button>
                         </div>
                     </section>
@@ -527,8 +550,13 @@ function App() {
                             <label>Age in years<input type="number" min="1" max="120" value={profile.age} onChange={(event) => setProfile({ ...profile, age: event.target.value })} placeholder="e.g. 32" required /></label>
                             <label>Gender<select value={profile.gender} onChange={(event) => setProfile({ ...profile, gender: event.target.value })}><option value="">Prefer not to say</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></label>
                             <label>Residence type<select value={profile.residenceType} onChange={(event) => setProfile({ ...profile, residenceType: event.target.value })}><option value="">Select if known</option><option value="RURAL">Rural</option><option value="URBAN">Urban</option></select></label>
-                            <label>Annual family income (INR)<input type="number" min="0" value={profile.annualFamilyIncome} onChange={(event) => setProfile({ ...profile, annualFamilyIncome: event.target.value })} placeholder="Optional" /></label>
+                            <label>Social category <span className="profile-optional">Optional</span><select value={profile.category} onChange={(event) => setProfile({ ...profile, category: event.target.value })}><option value="">Prefer not to say</option><option value="GENERAL">General</option><option value="OBC">OBC</option><option value="SC">SC</option><option value="ST">ST</option><option value="EWS">EWS</option></select></label>
+                            <label>Education level <span className="profile-optional">Optional</span><select value={profile.educationLevel} onChange={(event) => setProfile({ ...profile, educationLevel: event.target.value })}><option value="">Prefer not to say</option><option value="NO_FORMAL">No formal schooling</option><option value="PRIMARY">Primary school</option><option value="SECONDARY">Secondary school</option><option value="CLASS_10">Class 10</option><option value="CLASS_12">Class 12</option><option value="DIPLOMA_ITI">Diploma / ITI</option><option value="GRADUATE">Graduate</option><option value="POSTGRADUATE">Postgraduate</option><option value="OTHER">Other</option></select></label>
+                            <label>Annual family income (INR)<input type="number" min="0" value={profile.annualFamilyIncome} onChange={(event) => setProfile({ ...profile, annualFamilyIncome: event.target.value })} placeholder="Optional: exact amount" /></label>
+                            <label>Or choose an income range <span className="profile-optional">Optional</span><select value={profile.incomeRange} onChange={(event) => setProfile({ ...profile, incomeRange: event.target.value })}><option value="">Prefer not to say</option><option value="UNDER_1L">Below ₹1 lakh</option><option value="1_2_5L">₹1 lakh–₹2.5 lakh</option><option value="2_5_5L">₹2.5 lakh–₹5 lakh</option><option value="5_8L">₹5 lakh–₹8 lakh</option><option value="OVER_8L">Above ₹8 lakh</option></select></label>
                             <label>What best describes you?<select value={profile.occupation} onChange={(event) => setProfile({ ...profile, occupation: event.target.value })} required><option value="" disabled>Select one</option><option value="STUDENT">Student</option><option value="FARMER">Farmer</option><option value="SELF_EMPLOYED">Self-employed</option><option value="EMPLOYED">Employed</option><option value="LOOKING_FOR_WORK">Looking for work</option><option value="OTHER">Other</option></select></label>
+                            {profile.occupation === 'FARMER' && <div className="profile-conditional-fields"><p className="profile-section-title">Farmer details <span className="profile-optional">Optional</span></p><label>How do you use the land?<select value={profile.farmerLandAccess} onChange={(event) => setProfile({ ...profile, farmerLandAccess: event.target.value })}><option value="">Prefer not to say</option><option value="OWNED">I own the land</option><option value="LEASED">I lease the land</option><option value="BOTH">I own and lease land</option><option value="LANDLESS">I farm without owning land</option><option value="UNSURE">Not sure</option></select></label><label>Approximate land size<select value={profile.farmerLandSize} onChange={(event) => setProfile({ ...profile, farmerLandSize: event.target.value })}><option value="">Prefer not to say</option><option value="UNDER_1_ACRE">Less than 1 acre</option><option value="1_2_ACRES">1–2 acres</option><option value="2_5_ACRES">2–5 acres</option><option value="OVER_5_ACRES">More than 5 acres</option><option value="UNSURE">Not sure</option></select></label></div>}
+                            {profile.occupation === 'SELF_EMPLOYED' && <div className="profile-conditional-fields"><p className="profile-section-title">Business details <span className="profile-optional">Optional</span></p><label>Business stage<select value={profile.businessStage} onChange={(event) => setProfile({ ...profile, businessStage: event.target.value })}><option value="">Prefer not to say</option><option value="PLANNING">Planning to start</option><option value="NEW">Recently started</option><option value="EXISTING">Already running</option></select></label><label>Business type<select value={profile.businessType} onChange={(event) => setProfile({ ...profile, businessType: event.target.value })}><option value="">Prefer not to say</option><option value="MANUFACTURING">Manufacturing</option><option value="SERVICES">Services</option><option value="TRADING">Trading / shop</option><option value="AGRICULTURE_ALLIED">Agriculture-related</option><option value="OTHER">Other</option></select></label></div>}
                             <div className="privacy-note"><Icon name="shield" size={17} /><span>These details are saved in this browser and sent to the configured AI provider when you ask a question. They are not saved to an account. Clear this browser's site data to remove them.</span></div>
                             <button className="button button-primary form-submit" type="submit">Save profile <Icon name="arrow" size={16} /></button>
                         </form>

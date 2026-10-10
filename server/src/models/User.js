@@ -55,6 +55,12 @@ const userSchema = new mongoose.Schema(
       householdSize: { type: Number, default: 1 },
       isStudent: { type: Boolean, default: false },
       isFarmer: { type: Boolean, default: false },
+      educationLevel: { type: String, default: '' },
+      incomeRange: { type: String, default: '' },
+      farmerLandAccess: { type: String, default: '' },
+      farmerLandSize: { type: String, default: '' },
+      businessStage: { type: String, default: '' },
+      businessType: { type: String, default: '' },
     },
     savedSchemes: [
       {

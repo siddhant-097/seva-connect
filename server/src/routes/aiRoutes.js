@@ -31,6 +31,13 @@ const recommendationProfileSchema = z.object({
   residenceType: z.string().optional(),
   annualFamilyIncome: z.number().optional(),
   occupation: z.string().optional(),
+  category: z.enum(['GENERAL', 'OBC', 'SC', 'ST', 'EWS', '']).optional(),
+  educationLevel: z.string().optional(),
+  incomeRange: z.string().optional(),
+  farmerLandAccess: z.string().optional(),
+  farmerLandSize: z.string().optional(),
+  businessStage: z.string().optional(),
+  businessType: z.string().optional(),
   isFarmer: z.boolean().optional(),
   isStudent: z.boolean().optional(),
 }).strict();

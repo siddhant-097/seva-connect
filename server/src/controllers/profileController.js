@@ -18,7 +18,8 @@ export const updateProfile = async (req, res, next) => {
     const allowedFields = [
       'dateOfBirth', 'gender', 'state', 'district', 'residenceType',
       'annualFamilyIncome', 'occupation', 'category', 'householdSize',
-      'isStudent', 'isFarmer',
+      'isStudent', 'isFarmer', 'educationLevel', 'incomeRange',
+      'farmerLandAccess', 'farmerLandSize', 'businessStage', 'businessType',
     ];
 
     const updates = {};

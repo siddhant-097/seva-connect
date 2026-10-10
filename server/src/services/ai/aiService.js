@@ -113,6 +113,30 @@ async function getUnverifiedCandidates(profile = {}) {
     else if (/employed|worker/.test(occupation)) terms.push('worker', 'employee', 'labour', 'labor', 'employment');
     else if (occupation && !/farm|student/.test(occupation)) terms.push(...occupation.split(/\s+/).filter((term) => term.length > 3));
     if (profile.residenceType) terms.push(String(profile.residenceType).toLowerCase());
+    const categoryTerms = {
+        SC: ['scheduled caste', 'sc'], ST: ['scheduled tribe', 'st'], OBC: ['obc', 'backward class'],
+        EWS: ['ews', 'economically weaker'],
+    };
+    if (profile.category) terms.push(...(categoryTerms[profile.category] || []));
+    const educationTerms = {
+        CLASS_10: ['class 10', '10th', 'secondary'], CLASS_12: ['class 12', '12th', 'higher secondary'],
+        DIPLOMA_ITI: ['diploma', 'iti', 'vocational'], GRADUATE: ['graduate', 'degree'],
+        POSTGRADUATE: ['postgraduate', 'post graduate', 'master'],
+    };
+    if (profile.educationLevel) terms.push(...(educationTerms[profile.educationLevel] || []));
+    const landAccessTerms = {
+        OWNED: ['landowner', 'land owner', 'landholding', 'own land'],
+        LEASED: ['tenant farmer', 'leased land', 'lease land'],
+        BOTH: ['landowner', 'tenant farmer', 'leased land'],
+        LANDLESS: ['landless', 'tenant farmer'],
+    };
+    if (profile.farmerLandAccess) terms.push(...(landAccessTerms[profile.farmerLandAccess] || []));
+    if (profile.farmerLandSize === 'UNDER_1_ACRE' || profile.farmerLandSize === '1_2_ACRES') terms.push('marginal farmer', 'small farmer');
+    if (profile.businessType === 'MANUFACTURING') terms.push('manufacturing', 'manufacturer');
+    if (profile.businessType === 'SERVICES') terms.push('service business', 'services');
+    if (profile.businessType === 'TRADING') terms.push('trading', 'shop', 'retail');
+    if (profile.businessType === 'AGRICULTURE_ALLIED') terms.push('agri business', 'agriculture allied', 'agriculture');
+    if (profile.businessStage === 'PLANNING' || profile.businessStage === 'NEW') terms.push('startup', 'new enterprise', 'starting a business');
     const stateFilter = state ? { $or: [{ state: profile.state }, { state: 'ALL' }] } : {};
     const maleProfile = /^(male|man)$/i.test(String(profile.gender || '').trim());
     const femaleProfile = /^(female|woman)$/i.test(String(profile.gender || '').trim());
@@ -172,6 +196,12 @@ function buildUserProfileContext(user) {
     }
     if (p.occupation) parts.push(`Occupation: ${p.occupation}`);
     if (p.category) parts.push(`Category: ${p.category}`);
+    if (p.educationLevel) parts.push(`Education level: ${p.educationLevel}`);
+    if (p.incomeRange) parts.push(`Annual family income range: ${p.incomeRange}`);
+    if (p.farmerLandAccess) parts.push(`Farmer land access: ${p.farmerLandAccess}`);
+    if (p.farmerLandSize) parts.push(`Approximate farmland size: ${p.farmerLandSize}`);
+    if (p.businessStage) parts.push(`Business stage: ${p.businessStage}`);
+    if (p.businessType) parts.push(`Business type: ${p.businessType}`);
     if (p.isStudent) parts.push('Is a student: Yes');
     if (p.isFarmer) parts.push('Is a farmer: Yes');
 
