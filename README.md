@@ -60,7 +60,7 @@ For a larger catalogue, prepare a JSON array using `server/data/schemes.import.e
     npm run import:schemes --workspace server -- data/my-schemes.json
     npm run import:schemes --workspace server -- data/my-schemes.json apply
 
-The importer validates the full file and duplicate slugs before writing. Preview is the default. Add the word `apply` to write records; imported records are hidden from public browsing until reviewed and activated in `/admin`. Existing slugs are skipped; add `update-existing` only when you intend to replace their imported fields. The importer never deletes records.
+The importer validates the full file and duplicate slugs before writing. Preview is the default. Add the word `apply` to write records. Imported records are active by default and can appear in the public catalogue; `active` means available in the app, not verified. Use `/admin` to edit or deactivate records. Existing slugs are skipped; add `update-existing` only when you intend to replace their imported fields. The importer never deletes records.
 
 ### Study dataset currently in MongoDB
 
@@ -78,13 +78,15 @@ The seed catalogue contains 20 cards. Detailed eligibility rules and required do
 
 ### Profile and saved cards
 
-The public profile form collects state, age, gender, residence type, annual family income, and occupation. It is saved in browser localStorage under sevaconnect.profile.v1. It survives a refresh in the same browser but is not attached to a user account or shared across browsers. Clearing this browser's site data removes it.
+The public profile form collects state, age, gender, residence type, an optional exact annual family income and/or income range, occupation, social category, and education level. Farmer profiles can optionally include land access and approximate land size; self-employed profiles can optionally include business stage and type. These extra questions appear only for the matching occupation, and every added detail is optional. The profile is saved in browser localStorage under `sevaconnect.profile.v1`. It survives a refresh in the same browser but is not attached to a user account or shared across browsers. Clearing this browser's site data removes it.
 
-When a user asks the AI a question, the profile is sent with that chat request. The public page does not save the profile to the users collection. The card bookmark controls keep saved IDs in React state for the current page session; they do not persist across refreshes. Account-based profile and saved-scheme APIs exist but are not wired into the public page.
+When a user asks the AI a question, the profile is sent with that chat request and the recommendation request. The profile fields can be evaluated when a scheme has corresponding structured eligibility rules. Some optional fields also add search signals when ranking imported records, and all profile fields are available to the assistant as context. The income range is context only and is not converted into an exact income amount. The public page does not save the profile to the `users` collection. The card bookmark controls keep saved IDs in React state for the current page session; they do not persist across refreshes. Account-based profile and saved-scheme APIs exist but are not wired into the public page.
 
 ### AI chat and Ollama
 
-When the assistant opens, the client requests scheme suggestions from POST /api/v1/ai/recommendations. If a profile is available, the backend ranks schemes with the deterministic eligibility rules; otherwise it shows popular catalogue entries. Tapping a scheme starts an explanation automatically, so visitors can explore without typing first, then ask follow-up questions in the chat box.
+When the assistant opens, the client requests scheme suggestions from POST /api/v1/ai/recommendations. If a profile is available, the backend evaluates curated schemes with the deterministic eligibility rules and ranks imported records using state and profile-related terms; without a profile it shows popular catalogue entries. Tapping a suggestion starts an explanation automatically, so visitors can explore without typing first, then ask follow-up questions in the chat box. After an explanation, **Explore other schemes for my profile** opens a compact list of the remaining suggestions; selecting another scheme continues in the assistant conversation.
+
+Visitors can also start from the catalogue: open a scheme card, choose **Ask SevaConnect AI**, and the assistant explains that selected scheme using the saved profile when one is available. This sends the scheme ID with the chat request, just like selecting a scheme inside the assistant.
 
 For a chat turn, the client sends the question, selected language, optional profile, optional selected scheme ID, and current conversation ID to POST /api/v1/ai/chat. The backend loads the catalogue, applies deterministic eligibility rules if a profile was sent, selects relevant scheme facts, and builds a grounded prompt containing those facts, the match information, a language instruction, and the user's question. When the visitor taps a scheme card, the selected scheme ID keeps the assistant's answer focused on that scheme.
 
@@ -217,8 +219,9 @@ The admin page checks for ADMIN or CONTENT_MANAGER. Admin creation is performed 
 
 ## Evaluator demo flow
 
-1. Browse and search the scheme catalogue.
-2. Save a profile, refresh the browser, and show it persisted locally.
-3. Ask the AI a question about a scheme and follow the official source link.
-4. Open /admin, sign in, then add or edit a catalogue entry.
-5. Explain that the eligibility result is guidance, while application tracking and saved eligibility results are backend APIs not yet connected to public screens.
+1. Browse the catalogue, choose a state or category, and open a scheme.
+2. Choose **Ask SevaConnect AI** to send that scheme directly to the assistant.
+3. Save a profile, refresh the browser, and show that it persists locally. Edit the profile to show the optional category and education fields, or conditional farmer/business questions.
+4. In the assistant, select a suggestion, review the explanation, then open **Explore other schemes for my profile** and choose another option.
+5. Follow the official source link, then open `/admin`, sign in, and add or edit a catalogue entry.
+6. Explain that scheme matches are guidance, while application tracking and saved eligibility results are backend APIs not yet connected to public screens.
