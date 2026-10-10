@@ -147,6 +147,8 @@ function App() {
     const [conversationId, setConversationId] = useState(null)
     const [assistantSuggestions, setAssistantSuggestions] = useState({ schemes: [], personalized: false, hasMatches: false })
     const [loadingAssistantSuggestions, setLoadingAssistantSuggestions] = useState(false)
+    const [showOtherAssistantSchemes, setShowOtherAssistantSchemes] = useState(false)
+    const [selectedAssistantSchemeId, setSelectedAssistantSchemeId] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [aiLanguage, setAiLanguage] = useState('en')
     const [aiStatus, setAiStatus] = useState({ activeModel: 'SevaConnect AI', activeProvider: 'builtin', isOpenSource: true })
@@ -266,6 +268,7 @@ function App() {
     }) : schemes
     const pageCount = catalogFallback ? Math.ceil(filteredSchemes.length / schemesPerPage) : pagination.totalPages
     const visibleSchemes = catalogFallback ? filteredSchemes.slice((currentPage - 1) * schemesPerPage, currentPage * schemesPerPage) : schemes
+    const otherAssistantSchemes = assistantSuggestions.schemes.filter((scheme) => String(scheme.id || scheme.name) !== selectedAssistantSchemeId)
 
     const toggleSaved = (schemeId) => {
         setSaved((current) => current.includes(schemeId)
@@ -325,6 +328,8 @@ function App() {
     }
 
     const selectAssistantScheme = (scheme) => {
+        setSelectedAssistantSchemeId(String(scheme.id || scheme.name))
+        setShowOtherAssistantSchemes(false)
         const prompt = scheme.status === 'UNVERIFIED_CANDIDATE'
             ? 'Summarize only what the imported record says about ' + scheme.name + '. Clearly say this listing is unverified, do not decide or imply that I am eligible, and direct me to check the linked source before relying on it.'
             : profileSaved
@@ -336,6 +341,8 @@ function App() {
     const clearChat = () => {
         setConversation([])
         setConversationId(null)
+        setSelectedAssistantSchemeId('')
+        setShowOtherAssistantSchemes(false)
     }
 
     const copyToClipboard = (text, id) => {
@@ -562,6 +569,21 @@ function App() {
                             {isLoading && <div className="chat-msg msg-assistant"><div className="chat-bubble-assistant"><div className="typing-dots"><span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" /></div></div></div>}
                             <div ref={threadEndRef} />
                         </div>
+
+                        {conversation.length > 0 && profileSaved && otherAssistantSchemes.length > 0 && <div className="assistant-more-schemes">
+                            {showOtherAssistantSchemes && <div className="assistant-more-schemes-popover" id="assistant-more-schemes-list">
+                                <strong>Other schemes for your profile</strong>
+                                <div className="assistant-more-schemes-options">
+                                    {otherAssistantSchemes.map((scheme) => <button key={scheme.id || scheme.name} type="button" className="assistant-scheme-option" onClick={() => selectAssistantScheme(scheme)} disabled={isLoading}>
+                                        <span className="assistant-scheme-option-copy"><strong>{scheme.name}</strong><span>{scheme.category}{scheme.audience ? ' · ' + scheme.audience : ''}</span></span>
+                                        <Icon name="arrow" size={16} />
+                                    </button>)}
+                                </div>
+                            </div>}
+                            <button type="button" className="assistant-more-schemes-trigger" aria-expanded={showOtherAssistantSchemes} aria-controls="assistant-more-schemes-list" onClick={() => setShowOtherAssistantSchemes((open) => !open)}>
+                                {showOtherAssistantSchemes ? 'Close scheme list' : 'Explore other schemes for my profile'}
+                            </button>
+                        </div>}
 
                         <form className="assistant-compose" onSubmit={handleFormSubmit}><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={aiLanguage === 'hi' ? 'योजना के बारे में पूछें...' : aiLanguage === 'hinglish' ? 'Scheme ke baare mein poochhein...' : 'Ask about a scheme, document, or eligibility...'} aria-label="Ask a question" disabled={isLoading} /><button className="button button-primary" type="submit" aria-label="Send message" disabled={!message.trim() || isLoading}><Icon name="arrow" size={18} /></button></form>
                         <p className="assistant-disclaimer">For guidance only. Check every detail with the official source.</p>
